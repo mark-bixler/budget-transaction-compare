@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>b.b.m.t.c</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+    <style>
+      table,
+      th,
+      td {
+        border: 1px solid black;
+      }
+    </style>
+    <link href="../assets/icons/favicon.ico" rel="icon" type="image/x-icon" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <nav>
+      <div class="nav-wrapper green darken-2">
+        <a href="#" class="brand-logo center">Monthly Transaction Compare v1</a>
+      </div>
+    </nav>
+
+    <form id="upload-form" class="icon-form">
+      <div class="input-row">
+        <img src="../assets/icons/good-budget-icon.png" alt="goodBudget" />
+        <div class="custom-file-upload">
+          <label for="file1" class="custom-file-upload">
+            <i class="material-icons">attach_file</i>
+            attach file
+            <span id="file1-name" class="file-name"></span>
+          </label>
+          <input type="file" id="file1" name="file1" accept=".csv" required />
+        </div>
+      </div>
+      <div class="input-row">
+        <img src="../assets/icons/citi-icon.jpg" alt="citi" />
+        <div class="custom-file-upload">
+          <label for="file2" class="custom-file-upload">
+            <i class="material-icons">attach_file</i>
+            attach file
+            <span id="file2-name" class="file-name"></span>
+          </label>
+          <input type="file" id="file2" name="file2" accept=".csv" required />
+        </div>
+      </div>
+      <div class="input-row">
+        <img src="../assets/icons/chase-icon.jpg" alt="chase" />
+        <div class="custom-file-upload">
+          <label for="file3" class="custom-file-upload">
+            <i class="material-icons">attach_file</i>
+            attach file
+            <span id="file3-name" class="file-name"></span>
+          </label>
+          <input type="file" id="file3" name="file3" accept=".csv" required />
+        </div>
+      </div>
+      <div class="input-row">
+        <img src="../assets/icons/usbank.jpg" alt="usbank" />
+        <div class="custom-file-upload">
+          <label for="file4" class="custom-file-upload">
+            <i class="material-icons">attach_file</i>
+            attach file
+            <span id="file4-name" class="file-name"></span>
+          </label>
+          <input type="file" id="file4" name="file4" accept=".csv" required />
+        </div>
+      </div>
+      <div class="input-row">
+        <img src="../assets/icons/usbank.jpg" alt="usbank" />
+        <div class="custom-file-upload">
+          <label for="file5" class="custom-file-upload">
+            <i class="material-icons">attach_file</i>
+            attach file
+            <span id="file5-name" class="file-name"></span>
+          </label>
+          <input type="file" id="file5" name="file5" accept=".csv" required />
+        </div>
+      </div>
+      <div class="submit-btn">
+        <input type="submit" value="Compare" />
+      </div>
+    </form>
+
+    <div class="card-panel grey lighten-2 difference-header">
+      Differences Table
+    </div>
+    <table id="differences-table" class="striped highlight"></table>
+
+    <script src="app.js"></script>
+  </body>
+</html>

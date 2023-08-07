@@ -1,0 +1,124 @@
+.icon-form .input-row {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+  border: 1px solid #000; /* Border around each input block */
+  padding: 10px; /* Space between the border and the contents */
+  border-radius: 1px; /* Rounded corners for the border */
+  background-color: #f8f8f8; /* Light grey background color for each block */
+}
+
+.icon-form .input-row img {
+  margin-right: 10px;
+  width: 40px; /* specify width */
+  height: 40px; /* specify height */
+}
+
+.custom-file-upload input[type='file'] {
+  display: none;
+}
+
+.custom-file-upload label {
+  padding: 6px 12px;
+  background-color: hsl(212, 15%, 78%);
+  color: #111e2b;
+  cursor: pointer;
+  border: 1px solid #111e2b;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.custom-file-upload label:hover {
+  background-color: #f6f6f7;
+}
+
+.custom-file-upload input[type='file']:focus + label {
+  outline: auto;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.submit-btn {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.submit-btn input[type='submit'] {
+  background-color: green;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.submit-btn input[type='submit']:hover {
+  background-color: #0056b3;
+}
+
+.difference-header {
+  font-weight: bold;
+  padding: 5px 5px;
+}
+
+.custom-file-upload .material-icons {
+  font-size: 15px;
+}
+
+#differences-table tr {
+  height: 30px; /* Adjust as needed */
+  line-height: 30px; /* Adjust as needed */
+}
+#differences-table td {
+   padding: 5px 10px; /* Adjust as needed */
+}
+#differences-table th {
+  padding: 5px 10px; /* Adjust as needed */
+}
+
+/* Custom Material Design Checkbox */
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* Hide default checkbox appearance */
+.custom-checkbox input[type='checkbox'] {
+  position: absolute;
+  opacity: 0;
+}
+
+/* Create the custom checkbox appearance */
+.custom-checkbox .checkbox-container {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #2196f3;
+  border-radius: 4px;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s ease-in-out;
+}
+
+/* Style the checkbox when checked */
+.custom-checkbox input[type='checkbox']:checked + .checkbox-container::after {
+  content: '\2713';
+  color: #2196f3;
+  font-size: 16px;
+}
+
+/* Style the label text */
+.custom-checkbox label {
+  font-size: 16px;
+  color: #000;
+}
+
+/* Hover effect for the checkbox container */
+.custom-checkbox .checkbox-container:hover {
+  border-color: #1976d2;
+}
