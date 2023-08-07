@@ -56,31 +56,21 @@ app.post('/upload', upload.array('files', 5), (req, res) => __awaiter(void 0, vo
     });
     res.json(differences);
     // Delete the files after sending the response
-    fs_1.default.unlink(file1.path, (err) => {
-        if (err)
-            throw err;
-    });
-    fs_1.default.unlink(file2.path, (err) => {
-        if (err)
-            throw err;
-    });
-    fs_1.default.unlink(file3.path, (err) => {
-        if (err)
-            throw err;
-    });
-    fs_1.default.unlink(file4.path, (err) => {
-        if (err)
-            throw err;
-    });
-    fs_1.default.unlink(file5.path, (err) => {
-        if (err)
-            throw err;
+    const filePaths = [
+        file1.path,
+        file2.path,
+        file3.path,
+        file4.path,
+        file5.path,
+    ];
+    // Loop through the file paths and delete the files
+    filePaths.forEach((filePath) => {
+        fs_1.default.unlink(filePath, (err) => {
+            if (err)
+                throw err;
+        });
     });
 }));
-// Endpoint to get the stored data
-app.get('/data', (req, res) => {
-    res.json(data);
-});
 app.listen(3000, () => {
     console.log('Server started on http://localhost:3000');
 });

@@ -65,27 +65,21 @@ app.post('/upload', upload.array('files', 5), async (req, res) => {
   res.json(differences);
 
   // Delete the files after sending the response
-  fs.unlink(file1.path, (err) => {
-    if (err) throw err;
-  });
+  const filePaths = [
+    file1.path,
+    file2.path,
+    file3.path,
+    file4.path,
+    file5.path,
+  ];
 
-  fs.unlink(file2.path, (err) => {
-    if (err) throw err;
-  });
-
-  fs.unlink(file3.path, (err) => {
-    if (err) throw err;
-  });
-
-  fs.unlink(file4.path, (err) => {
-    if (err) throw err;
-  });
-
-  fs.unlink(file5.path, (err) => {
-    if (err) throw err;
+  // Loop through the file paths and delete the files
+  filePaths.forEach((filePath) => {
+    fs.unlink(filePath, (err) => {
+      if (err) throw err;
+    });
   });
 });
-
 app.listen(3000, () => {
   console.log('Server started on http://localhost:3000');
 });

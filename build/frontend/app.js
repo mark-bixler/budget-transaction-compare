@@ -20,6 +20,15 @@ document.getElementById('upload-form').addEventListener('submit', function (even
         .then(data => displayDifferences(data))
         .catch(error => console.error('Error:', error));
 });
+// Setup for local testing
+// Test data
+const testData = [
+    { name: 'Item 1', envelope: 'Envelope A', amount: 100 },
+    { name: 'Item 2', envelope: 'Envelope B', amount: 200 },
+    { name: 'Item 3', envelope: 'Envelope C', amount: 50 },
+];
+const testButton = document.getElementById('testButton');
+testButton.addEventListener('click', displayDifferences(testData));
 function displayDifferences(data) {
     const table = document.getElementById('differences-table');
     // Clear existing data
@@ -34,10 +43,14 @@ function displayDifferences(data) {
         checkbox.type = 'checkbox';
         checkbox.id = 'checkbox_' + index;
         checkbox.classList.add('custom-checkbox');
+        const label = document.createElement('label');
+        label.setAttribute('for', 'checkbox_' + index);
         checkboxCell.appendChild(checkbox); // Append the checkbox element to the checkbox cell
-        const checkboxLabel = document.createElement('label');
-        checkboxLabel.setAttribute('for', 'checkbox_' + index);
-        checkboxLabel.textContent = 'Check item ' + (index + 1);
+        const span = document.createElement('span'); // Create the span element
+        span.textContent = ''; // Set the text content for the span element
+        label.appendChild(checkbox); // Append the checkbox element to the label element
+        label.appendChild(span); // Append the span element to the label element
+        checkboxCell.appendChild(label); // Append the label element to the checkbox cell
         const lineNumberCell = document.createElement('td');
         const nameCell = document.createElement('td');
         const envelopeCell = document.createElement('td');
