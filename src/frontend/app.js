@@ -24,6 +24,19 @@ document.getElementById('upload-form').addEventListener('submit', function (even
     .catch(error => console.error('Error:', error));
 });
 
+// Setup for local testing
+
+// Test data
+const testData = [
+  { name: 'Item 1', envelope: 'Envelope A', amount: 100 },
+  { name: 'Item 2', envelope: 'Envelope B', amount: 200 },
+  { name: 'Item 3', envelope: 'Envelope C', amount: 50 },
+];
+
+
+// const testButton = document.getElementById('testButton');
+// testButton.addEventListener('click', displayDifferences(testData));
+
 function displayDifferences(data) {
   const table = document.getElementById('differences-table');
 
@@ -41,11 +54,16 @@ function displayDifferences(data) {
     checkbox.type = 'checkbox';
     checkbox.id = 'checkbox_' + index;
     checkbox.classList.add('custom-checkbox');
+    const label = document.createElement('label')
+    label.setAttribute('for', 'checkbox_' + index);
+    
     checkboxCell.appendChild(checkbox); // Append the checkbox element to the checkbox cell
-
-    const checkboxLabel = document.createElement('label')
-    checkboxLabel.setAttribute('for', 'checkbox_' + index)
-    checkboxLabel.textContent = 'Check item ' + (index + 1);
+    const span = document.createElement('span'); // Create the span element
+    span.textContent = ''; // Set the text content for the span element
+    
+    label.appendChild(checkbox); // Append the checkbox element to the label element
+    label.appendChild(span); // Append the span element to the label element
+    checkboxCell.appendChild(label); // Append the label element to the checkbox cell
 
     const lineNumberCell = document.createElement('td');
     const nameCell = document.createElement('td');
@@ -68,23 +86,31 @@ function displayDifferences(data) {
 
 }
 
+// Function to update the label text with the selected file name
+function updateLabelWithFileName(inputId) {
+  const fileInput = document.getElementById(inputId);
+  const label = document.querySelector(`label[for="${inputId}"]`);
+  const fileName = fileInput.files[0]?.name || 'Attach file'; // Use the file name if available, otherwise fallback to 'Attach file'
+  label.textContent = ` ${fileName}`;
+}
+
 // add file names to doc upload files
 document.getElementById('file1').addEventListener('change', function (e) {
-  document.getElementById('file1-name').textContent = e.target.files[0].name;
+  updateLabelWithFileName('file1');
 });
 
 document.getElementById('file2').addEventListener('change', function (e) {
-  document.getElementById('file2-name').textContent = e.target.files[0].name;
+  updateLabelWithFileName('file2');
 });
 
 document.getElementById('file3').addEventListener('change', function (e) {
-  document.getElementById('file3-name').textContent = e.target.files[0].name;
+  updateLabelWithFileName('file3');
 });
 
 document.getElementById('file4').addEventListener('change', function (e) {
-  document.getElementById('file4-name').textContent = e.target.files[0].name;
+  updateLabelWithFileName('file4');
 });
 
 document.getElementById('file5').addEventListener('change', function (e) {
-  document.getElementById('file5-name').textContent = e.target.files[0].name;
+  updateLabelWithFileName('file5');
 });
