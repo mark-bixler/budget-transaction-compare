@@ -31,6 +31,13 @@ let data = [];
 app.get('/', (req, res) => {
     res.sendFile(path_1.default.join(__dirname, '../../src/frontend/index.html'));
 });
+// health checks
+app.get('/health-check', (req, res) => {
+    res.status(200).send('Health check passed');
+});
+app.get('/bad-health', (req, res) => {
+    res.status(500).send('Health check failed');
+});
 // handle the upload and comparison
 app.post('/upload', upload.array('files', 5), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const files = req.files;
