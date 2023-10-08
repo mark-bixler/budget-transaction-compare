@@ -22,6 +22,7 @@ const fs_1 = __importDefault(require("fs"));
 const compare_1 = require("./compare");
 // Setup code for Express, multer, etc.
 const app = (0, express_1.default)();
+const port = 9000;
 app.use((0, cors_1.default)());
 app.use(express_1.default.static(path_1.default.join(__dirname, '../../src/frontend')));
 app.use(express_1.default.static(path_1.default.join(__dirname, '../../src')));
@@ -78,6 +79,6 @@ app.post('/upload', upload.array('files', 5), (req, res) => __awaiter(void 0, vo
         });
     });
 }));
-app.listen(3000, () => {
-    console.log('Server started on http://localhost:3000');
+app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
 });

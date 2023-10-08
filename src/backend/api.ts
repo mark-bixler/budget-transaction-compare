@@ -11,6 +11,8 @@ import { compareCSVs } from './compare';
 // Setup code for Express, multer, etc.
 
 const app = express();
+const port = 3000;
+
 app.use(cors());
 app.use(express.static(path.join(__dirname, '../../src/frontend')));
 app.use(express.static(path.join(__dirname, '../../src')));
@@ -89,6 +91,6 @@ app.post('/upload', upload.array('files', 5), async (req, res) => {
     });
   });
 });
-app.listen(3000, () => {
-  console.log('Server started on http://localhost:3000');
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
 });

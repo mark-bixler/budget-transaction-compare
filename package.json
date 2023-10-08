@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node ./build/backend/index.js"
+    "start": "node ./build/backend/api.js"
   },
   "keywords": [],
   "author": "",

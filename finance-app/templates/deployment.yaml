@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "express-chart.fullname" . }}
+  name: {{ include "finance-app.fullname" . }}
   namespace: {{.Release.Namespace}}
   labels:
-    {{- include "express-chart.labels" . | nindent 4 }}
+    {{- include "finance-app.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "express-chart.selectorLabels" . | nindent 6 }}
+      {{- include "finance-app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -19,7 +19,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "express-chart.selectorLabels" . | nindent 8 }}
+        {{- include "finance-app.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
