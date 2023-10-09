@@ -12,7 +12,10 @@ document.getElementById('upload-form').addEventListener('submit', function (even
     formData.append('files', file3);
     formData.append('files', file4);
     formData.append('files', file5);
-    fetch('http://0.0.0.0:9000/upload', {
+    // read in environment variables
+    const port = 3000;
+    const endpoint = 'localhost';
+    fetch(`http://${endpoint}:${port}/upload`, {
         method: 'POST',
         body: formData
     })
@@ -55,15 +58,18 @@ function displayDifferences(data) {
         const nameCell = document.createElement('td');
         const envelopeCell = document.createElement('td');
         const amountCell = document.createElement('td');
+        const dateCell = document.createElement('td');
         lineNumberCell.textContent = index + 1;
         nameCell.textContent = item.name || '';
         envelopeCell.textContent = item.envelope || '';
         amountCell.textContent = item.amount || '';
+        dateCell.textContent = item.date || '';
         row.appendChild(checkboxCell);
         row.appendChild(lineNumberCell);
         row.appendChild(nameCell);
         row.appendChild(envelopeCell);
         row.appendChild(amountCell);
+        row.appendChild(dateCell);
         table.appendChild(row);
     });
 }

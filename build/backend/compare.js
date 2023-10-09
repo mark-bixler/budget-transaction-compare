@@ -69,6 +69,9 @@ function parseCSV(file, key) {
                 if (h.toLowerCase() === 'description') {
                     return 'name';
                 }
+                if (h.toLocaleLowerCase() === 'transaction date') {
+                    return 'date';
+                }
                 return h.toLowerCase();
             },
             step: (result) => {

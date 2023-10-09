@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: 320662462741.dkr.ecr.us-west-2.amazonaws.com/finance-app
   pullPolicy: Always
-  tag: v0.0.2
+  tag: v0.0.5
 
 deployment:
   containerPort: 3000

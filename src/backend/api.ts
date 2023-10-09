@@ -11,7 +11,7 @@ import { compareCSVs } from './compare';
 // Setup code for Express, multer, etc.
 
 const app = express();
-const port = 3000;
+const port = 3000
 
 app.use(cors());
 app.use(express.static(path.join(__dirname, '../../src/frontend')));

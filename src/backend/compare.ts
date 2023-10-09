@@ -9,6 +9,7 @@ interface CSVRecord {
   amount: number;
   debit: number;
   credit: number;
+  date: string;
 }
 
 export async function compareCSVs(
@@ -61,6 +62,9 @@ function parseCSV(file: string, key: string): Promise<CSVRecord[]> {
         if (h.toLowerCase() === 'description') {
           return 'name';
         }
+        if (h.toLocaleLowerCase() === 'transaction date') {
+          return 'date';
+        }
         return h.toLowerCase();
       },
       step: (result) => {
@@ -99,6 +103,8 @@ async function findDifferences(
       // initialize comparison numbers
       let sourceAmount: Number = 0;
       let targetAmount: Number = 0;
+
+
 
       // convert source records with have header "amount"
       if (sourceRecord.amount) {
