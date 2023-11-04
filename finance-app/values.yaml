@@ -3,14 +3,14 @@ replicaCount: 1
 image:
   repository: 320662462741.dkr.ecr.us-west-2.amazonaws.com/finance-app
   pullPolicy: Always
-  tag: v0.0.5
+  tag: v0.0.11
 
 deployment:
   containerPort: 3000
 
 service:
-  type: LoadBalancer
-  port: 3000
+  type: ClusterIP
+  port: 80
   targetPort: 3000
   livenessProbePath: /health-check
   readinessProbePath: /health-check

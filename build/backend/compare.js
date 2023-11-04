@@ -69,7 +69,7 @@ function parseCSV(file, key) {
                 if (h.toLowerCase() === 'description') {
                     return 'name';
                 }
-                if (h.toLocaleLowerCase() === 'transaction date') {
+                if (h.toLowerCase() === 'transaction date') {
                     return 'date';
                 }
                 return h.toLowerCase();
@@ -80,6 +80,8 @@ function parseCSV(file, key) {
                     result.data.debit = -result.data.debit;
                     result.data.credit = -result.data.credit;
                 }
+                // standardize date format
+                result.data.date = formatDate(result.data.date);
                 results.push(result.data);
             },
             complete: () => {
@@ -153,4 +155,26 @@ function findDifferences(source, target, key) {
         }
         return differences;
     });
+}
+// Function to Standardize Transaction Dates
+function formatDate(dateString) {
+    const dashParts = dateString.split('-');
+    const slashParts = dateString.split('/');
+    if (dashParts.length === 3) {
+        const year = parseInt(dashParts[0]);
+        const month = parseInt(dashParts[1]);
+        const day = parseInt(dashParts[2]);
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+            return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        }
+    }
+    else if (slashParts.length === 3) {
+        const month = parseInt(slashParts[0]);
+        const day = parseInt(slashParts[1]);
+        const year = parseInt(slashParts[2]);
+        if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+            return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        }
+    }
+    return "null"; // Invalid date format
 }

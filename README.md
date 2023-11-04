@@ -38,6 +38,12 @@ After cloning the repository, navigate to the project directory and install the 
 npm install
 ```
 
+## Building after changes
+
+```bash
+npm run build
+```
+
 ## Running the Server
 
 To start the Express server, use the following command:
