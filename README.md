@@ -1,9 +1,6 @@
-# CSV Comparison Express Server
+# Table of Contents
 
-This project implements an Express server to compare CSV files uploaded by users. The server processes the uploaded files, compares them, and stores the results in memory.
-
-## Table of Contents
-
+- [Overview](#overview)
 - [Getting Started](#getting-started)
 - [Endpoints](#endpoints)
 - [Prerequisites](#prerequisites)
@@ -12,6 +9,16 @@ This project implements an Express server to compare CSV files uploaded by users
 - [Built With](#built-with)
 - [Authors](#authors)
 - [License](#license)
+
+## Overview
+
+This project implements an Express server to compare CSV bank statements uploaded by a user. The server processes the uploaded files, compares them, and stores the results in memory.
+
+This is a very specific use case which uses the app [Good Budget](https://goodbudget.com/) as the source of monthly transactions, and then the bank statements are compared against the transactions in GB to see what was missed.
+
+The idea behind this is GB is used as a "digital envelope" system and each transaction made in a month should be recorded shortly after it takes place. This is a manual entry by a user, either done via the GB Web or Phone App. Of course life happens, so some receipts get missed. That's why we need to verify against our credit card & checking account.
+
+![index](docs/v0.0.1-Sreenshot.png)
 
 ## Getting Started
 
