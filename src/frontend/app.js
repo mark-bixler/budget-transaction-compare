@@ -15,7 +15,7 @@ document.getElementById('upload-form').addEventListener('submit', function (even
   formData.append('files', file5);
 
   // read in environment variables
-  const port = 80
+  const port = 443
   const endpoint = 'finance-app.r53-mbcore-bixler.mbplatform.io'
 
   fetch(`https://${endpoint}:${port}/upload`, {

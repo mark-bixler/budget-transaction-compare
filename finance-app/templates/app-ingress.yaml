@@ -6,11 +6,11 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/backend-protocol: HTTP
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     alb.ingress.kubernetes.io/scheme: internal
     alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:320662462741:certificate/e3380579-845e-4b37-abac-d75059322605
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:320662462741:certificate/8d436f2d-85c8-4590-a260-d2fa2a336cd6
     external-dns.alpha.kubernetes.io/hostname: finance-app.ingress-private.r53-mbcore-bixler.mbplatform.io
     alb.ingress.kubernetes.io/subnets: subnet-0e71d64ef5014ff5f, subnet-0777eb511092f1a29
 spec:
