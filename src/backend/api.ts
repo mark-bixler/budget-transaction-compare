@@ -11,7 +11,8 @@ import { compareCSVs } from './compare';
 // Setup code for Express, multer, etc.
 
 const app = express();
-app.use(cors());
+const port = process.env.port || 3000
+
 app.use(express.static(path.join(__dirname, '../../src/frontend')));
 app.use(express.static(path.join(__dirname, '../../src')));
 
@@ -27,6 +28,15 @@ let data: DataItem[] = [];
 // get the front end
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../../src/frontend/index.html'));
+});
+
+// health checks
+app.get('/health-check', (req,res) => {
+  res.status(200).send('Health check passed')
+})
+
+app.get('/bad-health', (req, res) => {
+  res.status(500).send('Health check failed');
 });
 
 // handle the upload and comparison
@@ -80,6 +90,6 @@ app.post('/upload', upload.array('files', 5), async (req, res) => {
     });
   });
 });
-app.listen(3000, () => {
-  console.log('Server started on http://localhost:3000');
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
 });

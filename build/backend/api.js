@@ -22,6 +22,7 @@ const fs_1 = __importDefault(require("fs"));
 const compare_1 = require("./compare");
 // Setup code for Express, multer, etc.
 const app = (0, express_1.default)();
+const port = 3000;
 app.use((0, cors_1.default)());
 app.use(express_1.default.static(path_1.default.join(__dirname, '../../src/frontend')));
 app.use(express_1.default.static(path_1.default.join(__dirname, '../../src')));
@@ -30,6 +31,13 @@ let data = [];
 // get the front end
 app.get('/', (req, res) => {
     res.sendFile(path_1.default.join(__dirname, '../../src/frontend/index.html'));
+});
+// health checks
+app.get('/health-check', (req, res) => {
+    res.status(200).send('Health check passed');
+});
+app.get('/bad-health', (req, res) => {
+    res.status(500).send('Health check failed');
 });
 // handle the upload and comparison
 app.post('/upload', upload.array('files', 5), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -71,6 +79,6 @@ app.post('/upload', upload.array('files', 5), (req, res) => __awaiter(void 0, vo
         });
     });
 }));
-app.listen(3000, () => {
-    console.log('Server started on http://localhost:3000');
+app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
 });

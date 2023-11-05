@@ -12,7 +12,10 @@ document.getElementById('upload-form').addEventListener('submit', function (even
     formData.append('files', file3);
     formData.append('files', file4);
     formData.append('files', file5);
-    fetch('http://localhost:3000/upload', {
+    // read in environment variables
+    const port = 3000;
+    const endpoint = 'localhost';
+    fetch(`http://${endpoint}:${port}/upload`, {
         method: 'POST',
         body: formData
     })
@@ -27,8 +30,8 @@ const testData = [
     { name: 'Item 2', envelope: 'Envelope B', amount: 200 },
     { name: 'Item 3', envelope: 'Envelope C', amount: 50 },
 ];
-const testButton = document.getElementById('testButton');
-testButton.addEventListener('click', displayDifferences(testData));
+// const testButton = document.getElementById('testButton');
+// testButton.addEventListener('click', displayDifferences(testData));
 function displayDifferences(data) {
     const table = document.getElementById('differences-table');
     // Clear existing data
@@ -55,31 +58,42 @@ function displayDifferences(data) {
         const nameCell = document.createElement('td');
         const envelopeCell = document.createElement('td');
         const amountCell = document.createElement('td');
+        const dateCell = document.createElement('td');
         lineNumberCell.textContent = index + 1;
         nameCell.textContent = item.name || '';
         envelopeCell.textContent = item.envelope || '';
         amountCell.textContent = item.amount || '';
+        dateCell.textContent = item.date || '';
         row.appendChild(checkboxCell);
         row.appendChild(lineNumberCell);
         row.appendChild(nameCell);
         row.appendChild(envelopeCell);
         row.appendChild(amountCell);
+        row.appendChild(dateCell);
         table.appendChild(row);
     });
 }
+// Function to update the label text with the selected file name
+function updateLabelWithFileName(inputId) {
+    var _a;
+    const fileInput = document.getElementById(inputId);
+    const label = document.querySelector(`label[for="${inputId}"]`);
+    const fileName = ((_a = fileInput.files[0]) === null || _a === void 0 ? void 0 : _a.name) || 'Attach file'; // Use the file name if available, otherwise fallback to 'Attach file'
+    label.textContent = ` ${fileName}`;
+}
 // add file names to doc upload files
 document.getElementById('file1').addEventListener('change', function (e) {
-    document.getElementById('file1-name').textContent = e.target.files[0].name;
+    updateLabelWithFileName('file1');
 });
 document.getElementById('file2').addEventListener('change', function (e) {
-    document.getElementById('file2-name').textContent = e.target.files[0].name;
+    updateLabelWithFileName('file2');
 });
 document.getElementById('file3').addEventListener('change', function (e) {
-    document.getElementById('file3-name').textContent = e.target.files[0].name;
+    updateLabelWithFileName('file3');
 });
 document.getElementById('file4').addEventListener('change', function (e) {
-    document.getElementById('file4-name').textContent = e.target.files[0].name;
+    updateLabelWithFileName('file4');
 });
 document.getElementById('file5').addEventListener('change', function (e) {
-    document.getElementById('file5-name').textContent = e.target.files[0].name;
+    updateLabelWithFileName('file5');
 });

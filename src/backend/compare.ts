@@ -9,6 +9,7 @@ interface CSVRecord {
   amount: number;
   debit: number;
   credit: number;
+  date: string;
 }
 
 export async function compareCSVs(
@@ -61,6 +62,9 @@ function parseCSV(file: string, key: string): Promise<CSVRecord[]> {
         if (h.toLowerCase() === 'description') {
           return 'name';
         }
+        if (h.toLowerCase() === 'transaction date') {
+          return 'date';
+        }
         return h.toLowerCase();
       },
       step: (result) => {
@@ -69,6 +73,9 @@ function parseCSV(file: string, key: string): Promise<CSVRecord[]> {
           result.data.debit = -result.data.debit;
           result.data.credit = -result.data.credit;
         }
+
+        // standardize date format
+        result.data.date = formatDate(result.data.date)
 
         results.push(result.data);
       },
@@ -156,4 +163,30 @@ async function findDifferences(
     }
   }
   return differences;
+}
+
+// Function to Standardize Transaction Dates
+function formatDate(dateString: string): string {
+  const dashParts = dateString.split('-');
+  const slashParts = dateString.split('/');
+
+  if (dashParts.length === 3) {
+    const year = parseInt(dashParts[0]);
+    const month = parseInt(dashParts[1]);
+    const day = parseInt(dashParts[2]);
+
+    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    }
+  } else if (slashParts.length === 3) {
+    const month = parseInt(slashParts[0]);
+    const day = parseInt(slashParts[1]);
+    const year = parseInt(slashParts[2]);
+
+    if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    }
+  }
+
+  return "null"; // Invalid date format
 }
