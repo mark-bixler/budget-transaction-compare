@@ -12,7 +12,6 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:320662462741:certificate/8d436f2d-85c8-4590-a260-d2fa2a336cd6
     external-dns.alpha.kubernetes.io/hostname: finance-app.ingress-private.r53-mbcore-bixler.mbplatform.io
-    alb.ingress.kubernetes.io/subnets: subnet-0e71d64ef5014ff5f, subnet-0777eb511092f1a29
 spec:
   rules:
   - host: finance-app.r53-mbcore-bixler.mbplatform.io
