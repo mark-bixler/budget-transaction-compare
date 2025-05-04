@@ -15,15 +15,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // src/backend/index.ts
 const express_1 = __importDefault(require("express"));
 const multer_1 = __importDefault(require("multer"));
-const cors_1 = __importDefault(require("cors"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 // Import the compareCSVs function from utils.ts
 const compare_1 = require("./compare");
 // Setup code for Express, multer, etc.
 const app = (0, express_1.default)();
-const port = 3000;
-app.use((0, cors_1.default)());
+const port = process.env.port || 3000;
 app.use(express_1.default.static(path_1.default.join(__dirname, '../../src/frontend')));
 app.use(express_1.default.static(path_1.default.join(__dirname, '../../src')));
 const upload = (0, multer_1.default)({ dest: 'uploads/' });

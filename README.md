@@ -1,14 +1,18 @@
 # Table of Contents
 
-- [Overview](#overview)
-- [Getting Started](#getting-started)
-- [Endpoints](#endpoints)
-- [Prerequisites](#prerequisites)
-- [Installing Dependencies](#installing-dependencies)
-- [Running the Server](#running-the-server)
-- [Built With](#built-with)
-- [Authors](#authors)
-- [License](#license)
+- [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Getting Started](#getting-started)
+  - [Endpoints](#endpoints)
+  - [Prerequisites](#prerequisites)
+  - [Installing Dependencies](#installing-dependencies)
+  - [Building after changes](#building-after-changes)
+  - [Running the Server](#running-the-server)
+  - [Running in a container](#running-in-a-container)
+  - [How it Works](#how-it-works)
+  - [Built With](#built-with)
+  - [Authors](#authors)
+  - [License](#license)
 
 ## Overview
 
@@ -60,6 +64,14 @@ npm start
 ```
 
 The server will start running on <http://localhost:3000>.
+
+## Running in a container
+
+```bash
+docker build . -t budget_app
+
+docker run -d budget_app
+```
 
 ## How it Works
 

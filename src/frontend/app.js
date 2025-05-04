@@ -27,11 +27,10 @@ document.getElementById('upload-form').addEventListener('submit', function (even
 
 // Test data
 const testData = [
-  { name: 'Item 1', envelope: 'Envelope A', amount: 100 },
-  { name: 'Item 2', envelope: 'Envelope B', amount: 200 },
-  { name: 'Item 3', envelope: 'Envelope C', amount: 50 },
+  { name: 'Item 1', envelope: 'Envelope A', formattedAmount: '$100.00' },
+  { name: 'Item 2', envelope: 'Envelope B', formattedAmount: '$200.00' },
+  { name: 'Item 3', envelope: 'Envelope C', formattedAmount: '$50.00' },
 ];
-
 
 // const testButton = document.getElementById('testButton');
 // testButton.addEventListener('click', displayDifferences(testData));
@@ -73,7 +72,7 @@ function displayDifferences(data) {
     lineNumberCell.textContent = index + 1;
     nameCell.textContent = item.name || '';
     envelopeCell.textContent = item.envelope || '';
-    amountCell.textContent = item.amount || '';
+    amountCell.textContent = item.formattedAmount || '';
     dateCell.textContent = item.date || '';
 
     row.appendChild(checkboxCell);
@@ -85,7 +84,6 @@ function displayDifferences(data) {
 
     table.appendChild(row);
   });
-
 }
 
 // Function to update the label text with the selected file name

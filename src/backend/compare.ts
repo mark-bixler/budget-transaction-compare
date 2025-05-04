@@ -3,13 +3,136 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // create interface for records
-interface CSVRecord {
+export interface CSVRecord {
   name: string;
   envelope: string;
-  amount: number;
-  debit: number;
-  credit: number;
+  formattedAmount: string;
   date: string;
+}
+
+// Define CSV parser strategies
+interface CSVParserStrategy {
+  transformHeader(header: string): string;
+  transformRecord(record: any): CSVRecord;
+}
+
+// Helper function to format amount with dollar sign and decimals
+function formatAmount(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
+
+export class GoodBudgetParser implements CSVParserStrategy {
+  transformHeader(header: string): string {
+    return header.toLowerCase();
+  }
+
+  transformRecord(record: any): CSVRecord {
+    const amount = Number(record.amount?.toString().replace(/,/g, '') || 0);
+    return {
+      name: record.name,
+      envelope: record.envelope || '--SPLIT--',
+      formattedAmount: formatAmount(amount),
+      date: formatDate(record.date)
+    };
+  }
+}
+
+export class CitiBankParser implements CSVParserStrategy {
+  transformHeader(header: string): string {
+    if (header.toLowerCase() === 'description') return 'name';
+    return header.toLowerCase();
+  }
+
+  transformRecord(record: any): CSVRecord {
+    console.log('Citi record before transform:', record);
+    
+    // Convert credit/debit to a single amount
+    let amount = 0;
+    if (record.debit) {
+      amount = -Number(record.debit.toString().replace(/,/g, ''));
+    } else if (record.credit) {
+      amount = Number(record.credit.toString().replace(/,/g, ''));
+    }
+
+    const transformedRecord = {
+      name: record.name || record.description || '',
+      envelope: '',
+      formattedAmount: formatAmount(amount),
+      date: formatDate(record.date)
+    };
+
+    console.log('Citi record after transform:', transformedRecord);
+    return transformedRecord;
+  }
+}
+
+export class ChaseParser implements CSVParserStrategy {
+  transformHeader(header: string): string {
+    if (header.toLowerCase() === 'description') return 'name';
+    if (header.toLowerCase() === 'transaction date') return 'date';
+    return header.toLowerCase();
+  }
+
+  transformRecord(record: any): CSVRecord {
+    console.log('Chase record before transform:', record);
+    
+    // Handle amount - Chase uses negative numbers for debits
+    let amount = 0;
+    if (record.amount) {
+      amount = Number(record.amount.toString().replace(/,/g, ''));
+    } else if (record.debit) {
+      amount = -Number(record.debit.toString().replace(/,/g, ''));
+    } else if (record.credit) {
+      amount = Number(record.credit.toString().replace(/,/g, ''));
+    }
+
+    const transformedRecord = {
+      name: record.name || record.description || '',
+      envelope: '',
+      formattedAmount: formatAmount(amount),
+      date: formatDate(record.date)
+    };
+
+    console.log('Chase record after transform:', transformedRecord);
+    return transformedRecord;
+  }
+}
+
+export class USBankParser implements CSVParserStrategy {
+  transformHeader(header: string): string {
+    return header.toLowerCase();
+  }
+
+  transformRecord(record: any): CSVRecord {
+    const amount = Number(record.amount?.toString().replace(/,/g, '') || 0);
+    return {
+      name: record.name,
+      envelope: '',
+      formattedAmount: formatAmount(amount),
+      date: formatDate(record.date)
+    };
+  }
+}
+
+const parserMap: Record<string, new () => CSVParserStrategy> = {
+  'goodBudget': GoodBudgetParser,
+  'citiBank': CitiBankParser,
+  'chase': ChaseParser,
+  'us-checking': USBankParser,
+  'us-credit': USBankParser
+};
+
+function getParser(key: string): CSVParserStrategy {
+  const Parser = parserMap[key];
+  if (!Parser) {
+    throw new Error(`Unknown parser key: ${key}`);
+  }
+  return new Parser();
 }
 
 export async function compareCSVs(
@@ -52,32 +175,15 @@ export async function compareCSVs(
 function parseCSV(file: string, key: string): Promise<CSVRecord[]> {
   return new Promise((resolve, reject) => {
     const results: CSVRecord[] = [];
-
+    const parser = getParser(key);
     const filePath = path.join(__dirname, '../..', file);
     const fileStream = fs.createReadStream(filePath);
 
-    Papa.parse<CSVRecord>(fileStream, {
+    Papa.parse(fileStream, {
       header: true,
-      transformHeader: function (h) {
-        if (h.toLowerCase() === 'description') {
-          return 'name';
-        }
-        if (h.toLowerCase() === 'transaction date') {
-          return 'date';
-        }
-        return h.toLowerCase();
-      },
+      transformHeader: parser.transformHeader.bind(parser),
       step: (result) => {
-        // invert data amount for citiBank
-        if (key === 'citiBank') {
-          result.data.debit = -result.data.debit;
-          result.data.credit = -result.data.credit;
-        }
-
-        // standardize date format
-        result.data.date = formatDate(result.data.date)
-
-        results.push(result.data);
+        results.push(parser.transformRecord(result.data));
       },
       complete: () => {
         resolve(results);
@@ -89,8 +195,71 @@ function parseCSV(file: string, key: string): Promise<CSVRecord[]> {
   });
 }
 
+// Helper function to get amount from record
+function getAmount(record: CSVRecord): number {
+  // Remove currency symbol and commas, then parse as number
+  return Number(record.formattedAmount.replace(/[$,]/g, ''));
+}
+
+// Helper function to check if transaction should be ignored
+function shouldIgnoreTransaction(name: string): boolean {
+  const payments = [
+    'PAYMENT',
+    'Payment Thank You - Web',
+    'WEB AUTHORIZED PMT CHASE CREDIT CRD',
+    'WEB AUTHORIZED PMT CITI CARD ONLINE',
+    'MONTHLY MAINTENANCE FEE',
+  ];
+  
+  return name === 'Envelope Transfer' || 
+         payments.some(payment => name.includes(payment));
+}
+
+// Helper function to calculate string similarity (0 to 1)
+function calculateSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const s2 = str2.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  if (s1 === s2) return 1;
+  if (s1.includes(s2) || s2.includes(s1)) return 0.8;
+  
+  // Calculate Levenshtein distance
+  const matrix = Array(s1.length + 1).fill(null).map(() => Array(s2.length + 1).fill(0));
+  
+  for (let i = 0; i <= s1.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= s2.length; j++) matrix[0][j] = j;
+  
+  for (let i = 1; i <= s1.length; i++) {
+    for (let j = 1; j <= s2.length; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  
+  const maxLength = Math.max(s1.length, s2.length);
+  return 1 - (matrix[s1.length][s2.length] / maxLength);
+}
+
+// Helper function to check if transactions match
+function transactionsMatch(source: CSVRecord, target: CSVRecord): boolean {
+  const sourceAmount = getAmount(source);
+  const targetAmount = getAmount(target);
+  const amountMatch = sourceAmount === targetAmount;
+  
+  if (!amountMatch) {
+    return false;
+  }
+  
+  const similarity = calculateSimilarity(source.name, target.name);
+  return similarity > 0.7;
+}
+
 // Compare csvs for differences
-async function findDifferences(
+export async function findDifferences(
   source: CSVRecord[],
   target: CSVRecord[],
   key: string,
@@ -98,78 +267,35 @@ async function findDifferences(
   const differences: CSVRecord[] = [];
 
   for (const sourceRecord of source) {
-    let found = false;
+    const found = target.some(targetRecord => 
+      transactionsMatch(sourceRecord, targetRecord)
+    );
 
-    for (const targetRecord of target) {
-      // convert amounts for better comparison
-
-      // initialize comparison numbers
-      let sourceAmount: Number = 0;
-      let targetAmount: Number = 0;
-
-      // convert source records with have header "amount"
-      if (sourceRecord.amount) {
-        sourceAmount = Number(sourceRecord.amount.toString().replace(/,/g, ''));
-      }
-
-      // convert target records with have header "amount"
-      if (targetRecord.amount) {
-        targetAmount = Number(targetRecord.amount.toString().replace(/,/g, ''));
-      }
-
-      // merge potential source credit or debit to amount.
-      if (sourceRecord.credit) {
-        sourceAmount = Number(sourceRecord.credit.toString().replace(/,/g, ''));
-        sourceRecord.amount = sourceRecord.credit;
-      } else if (sourceRecord.debit) {
-        sourceAmount = Number(sourceRecord.debit.toString().replace(/,/g, ''));
-        sourceRecord.debit = sourceRecord.debit;
-      }
-
-      // merge potential target credit or debit to amount.
-      if (targetRecord.credit) {
-        targetAmount = Number(targetRecord.credit.toString().replace(/,/g, ''));
-        targetRecord.amount = targetRecord.credit;
-      } else if (targetRecord.debit) {
-        targetAmount = Number(targetRecord.debit.toString().replace(/,/g, ''));
-        targetRecord.amount = targetRecord.debit;
-      }
-
-      if (sourceAmount === targetAmount) {
-        found = true;
-        break;
-      }
-    }
-
-    // return our missing transactions
-    let payments = [
-      'PAYMENT',
-      'Payment Thank You - Web',
-      'WEB AUTHORIZED PMT CHASE CREDIT CRD',
-      'WEB AUTHORIZED PMT CITI CARD ONLINE',
-      'MONTHLY MAINTENANCE FEE',
-    ];
-
-    if (
-      !found &&
-      sourceRecord.name != 'Envelope Transfer' &&
-      !payments.some((payment) => sourceRecord.name.includes(payment))
-    ) {
-      // if the envelope is null, most like it's a split transaction
-      if (key == 'goodBudget' && !sourceRecord.envelope) {
+    if (!found && !shouldIgnoreTransaction(sourceRecord.name)) {
+      // Handle split transactions for GoodBudget
+      if (key === 'goodBudget' && !sourceRecord.envelope) {
         sourceRecord.envelope = '--SPLIT--';
       }
       differences.push(sourceRecord);
     }
   }
+  
   return differences;
 }
 
 // Function to Standardize Transaction Dates
-function formatDate(dateString: string): string {
-  const dashParts = dateString.split('-');
-  const slashParts = dateString.split('/');
+function formatDate(dateString: string | undefined | null): string {
+  if (!dateString) {
+    return 'null';
+  }
 
+  // Handle Chase's double date format (take the first date)
+  if (dateString.includes(',')) {
+    dateString = dateString.split(',')[0];
+  }
+
+  // Try YYYY-MM-DD format first
+  const dashParts = dateString.split('-');
   if (dashParts.length === 3) {
     const year = parseInt(dashParts[0]);
     const month = parseInt(dashParts[1]);
@@ -178,7 +304,11 @@ function formatDate(dateString: string): string {
     if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
       return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
     }
-  } else if (slashParts.length === 3) {
+  }
+
+  // Try MM/DD/YYYY format
+  const slashParts = dateString.split('/');
+  if (slashParts.length === 3) {
     const month = parseInt(slashParts[0]);
     const day = parseInt(slashParts[1]);
     const year = parseInt(slashParts[2]);
@@ -188,5 +318,5 @@ function formatDate(dateString: string): string {
     }
   }
 
-  return "null"; // Invalid date format
+  return 'null';
 }

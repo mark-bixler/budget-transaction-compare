@@ -145,3 +145,6 @@ src/.kube
 
 # Mac Specific
 .DS_Store
+
+# Ignore local sample data
+sample-data
