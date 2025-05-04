@@ -6,7 +6,7 @@ describe('Transaction Comparison', () => {
     const { goodBudget, banks } = generateSampleData();
     
     console.log('Testing with sample data...');
-    const differences = await findDifferences(goodBudget, banks, 'goodBudget');
+    const differences = findDifferences(goodBudget, banks, 'goodBudget');
     
     // Log the differences for debugging
     console.log('\nDifferences found:', differences);

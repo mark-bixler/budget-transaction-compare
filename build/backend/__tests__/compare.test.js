@@ -15,7 +15,7 @@ describe('Transaction Comparison', () => {
     test('should find differences between GoodBudget and bank transactions', () => __awaiter(void 0, void 0, void 0, function* () {
         const { goodBudget, banks } = (0, sample_data_1.generateSampleData)();
         console.log('Testing with sample data...');
-        const differences = yield (0, compare_1.findDifferences)(goodBudget, banks, 'goodBudget');
+        const differences = (0, compare_1.findDifferences)(goodBudget, banks, 'goodBudget');
         // Log the differences for debugging
         console.log('\nDifferences found:', differences);
         // Verify we found the expected differences

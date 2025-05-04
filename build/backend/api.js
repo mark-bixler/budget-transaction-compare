@@ -17,7 +17,7 @@ const express_1 = __importDefault(require("express"));
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-// Import the compareCSVs function from utils.ts
+// Import the compareCSVs function from compare.ts
 const compare_1 = require("./compare");
 // Setup code for Express, multer, etc.
 const app = (0, express_1.default)();
@@ -58,7 +58,7 @@ app.post('/upload', upload.array('files', 5), (req, res) => __awaiter(void 0, vo
             file4.originalname,
             file5.originalname,
         ],
-        differences,
+        differences
     });
     res.json(differences);
     // Delete the files after sending the response

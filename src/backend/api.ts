@@ -5,8 +5,8 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 
-// Import the compareCSVs function from utils.ts
-import { compareCSVs } from './compare';
+// Import the compareCSVs function from compare.ts
+import { compareCSVs, CSVRecord } from './compare';
 
 // Setup code for Express, multer, etc.
 
@@ -21,7 +21,7 @@ const upload = multer({ dest: 'uploads/' });
 // Define the type for the data array
 interface DataItem {
   files: string[];
-  differences: any[]; // Adjust this type based on the actual return type of compareCSVs
+  differences: CSVRecord[];
 }
 let data: DataItem[] = [];
 
@@ -69,7 +69,7 @@ app.post('/upload', upload.array('files', 5), async (req, res) => {
       file4.originalname,
       file5.originalname,
     ],
-    differences,
+    differences
   });
 
   res.json(differences);
