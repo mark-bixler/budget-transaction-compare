@@ -212,13 +212,45 @@ function shouldIgnoreTransaction(name) {
 }
 // Helper function to calculate string similarity (0 to 1)
 function calculateSimilarity(str1, str2) {
-    const s1 = str1.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const s2 = str2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // Normalize strings: lowercase, remove special chars, replace spaces with empty
+    const normalize = (s) => s.toLowerCase()
+        .replace(/[^a-z0-9]/g, '') // Remove special chars
+        .replace(/\s+/g, ''); // Remove spaces
+    const s1 = normalize(str1);
+    const s2 = normalize(str2);
+    // Exact match after normalization
     if (s1 === s2)
         return 1;
+    // One string contains the other
     if (s1.includes(s2) || s2.includes(s1))
-        return 0.8;
-    // Calculate Levenshtein distance
+        return 0.9;
+    // Check for common abbreviations
+    const commonAbbrs = {
+        'network': ['net', 'netwrk', 'networ'],
+        'service': ['svc', 'serv'],
+        'payment': ['pmt', 'pay'],
+        'purchase': ['purch', 'pur'],
+        'transaction': ['trans', 'txn'],
+        'transfer': ['xfer', 'transf'],
+        'credit': ['cred', 'cr'],
+        'debit': ['deb', 'db']
+    };
+    // Try expanding abbreviations
+    let expanded1 = s1;
+    let expanded2 = s2;
+    for (const [full, abbrs] of Object.entries(commonAbbrs)) {
+        for (const abbr of abbrs) {
+            if (s1.includes(abbr))
+                expanded1 = expanded1.replace(abbr, full);
+            if (s2.includes(abbr))
+                expanded2 = expanded2.replace(abbr, full);
+        }
+    }
+    if (expanded1 === expanded2)
+        return 0.95;
+    if (expanded1.includes(expanded2) || expanded2.includes(expanded1))
+        return 0.9;
+    // Calculate Levenshtein distance with adjusted weights
     const matrix = Array(s1.length + 1).fill(null).map(() => Array(s2.length + 1).fill(0));
     for (let i = 0; i <= s1.length; i++)
         matrix[i][0] = i;
@@ -226,12 +258,37 @@ function calculateSimilarity(str1, str2) {
         matrix[0][j] = j;
     for (let i = 1; i <= s1.length; i++) {
         for (let j = 1; j <= s2.length; j++) {
-            const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
-            matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+            // Lower cost for similar characters (like 'o' and '0', 'i' and '1')
+            let cost = 1;
+            if (s1[i - 1] === s2[j - 1]) {
+                cost = 0;
+            }
+            else if ((s1[i - 1] === 'o' && s2[j - 1] === '0') ||
+                (s1[i - 1] === '0' && s2[j - 1] === 'o') ||
+                (s1[i - 1] === 'i' && s2[j - 1] === '1') ||
+                (s1[i - 1] === '1' && s2[j - 1] === 'i') ||
+                (s1[i - 1] === 'l' && s2[j - 1] === '1') ||
+                (s1[i - 1] === '1' && s2[j - 1] === 'l')) {
+                cost = 0.5;
+            }
+            matrix[i][j] = Math.min(matrix[i - 1][j] + 1, // deletion
+            matrix[i][j - 1] + 1, // insertion
+            matrix[i - 1][j - 1] + cost // substitution
+            );
         }
     }
     const maxLength = Math.max(s1.length, s2.length);
-    return 1 - (matrix[s1.length][s2.length] / maxLength);
+    const similarity = 1 - (matrix[s1.length][s2.length] / maxLength);
+    // Adjust threshold based on string lengths and content
+    const minLength = Math.min(s1.length, s2.length);
+    if (minLength <= 4) {
+        return similarity > 0.5 ? similarity : 0;
+    }
+    // Be more lenient with longer strings that have high similarity
+    if (similarity > 0.8) {
+        return similarity;
+    }
+    return similarity;
 }
 // Helper function to check if transactions match
 function transactionsMatch(source, target) {
@@ -242,7 +299,10 @@ function transactionsMatch(source, target) {
         return false;
     }
     const similarity = calculateSimilarity(source.name, target.name);
-    return similarity > 0.7;
+    // Lower threshold for shorter names, higher for longer names
+    const minLength = Math.min(source.name.length, target.name.length);
+    const threshold = minLength <= 4 ? 0.5 : 0.7;
+    return similarity > threshold;
 }
 // Compare csvs for differences
 function findDifferences(source, target, key) {
