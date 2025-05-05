@@ -32,7 +32,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.compareTransactions = exports.findDifferences = exports.compareCSVs = exports.USBankParser = exports.ChaseParser = exports.CitiBankParser = exports.GoodBudgetParser = void 0;
+exports.compareTransactions = exports.hasConsecutiveMatch = exports.findDifferences = exports.compareCSVs = exports.USBankParser = exports.ChaseParser = exports.CitiBankParser = exports.GoodBudgetParser = void 0;
 const Papa = __importStar(require("papaparse"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -76,7 +76,7 @@ class CitiBankParser {
             amount = -Number(record.debit.toString().replace(/,/g, ''));
         }
         else if (record.credit) {
-            amount = Number(record.credit.toString().replace(/,/g, ''));
+            amount = -Number(record.credit.toString().replace(/,/g, ''));
         }
         const transformedRecord = {
             name: record.name || record.description || '',
@@ -212,18 +212,20 @@ function shouldIgnoreTransaction(name) {
         payments.some(payment => name.includes(payment));
 }
 // Helper function to normalize transaction names
-function normalize(input, abbreviations = ['SQ']) {
+function normalize(input, ignores = ['SQ', 'ELECTRONIC WITHDRAWAL', 'WEB AUTHORIZED PMT']) {
     // First remove any known abbreviations from the start
     let processedString = input;
-    for (const abbr of abbreviations) {
+    for (const ignore of ignores) {
         // Remove abbreviation followed by a space or asterisk
-        const pattern = new RegExp(`^${abbr}\\s+\\*?\\s*`, 'i');
+        const pattern = new RegExp(`^${ignore}\\s+\\*?\\s*`, 'i');
         processedString = processedString.replace(pattern, '');
     }
+    // Remove special characters and whitespaces
+    processedString = processedString.replace(/[^\w]/g, '');
     // Now take the first 10 characters
-    processedString = processedString.substring(0, 10);
-    // Lowercase and remove all white spaces
-    return processedString.toLowerCase().replace(/\s+/g, '');
+    processedString = processedString.substring(0, 20);
+    // Lowercase
+    return processedString.toLowerCase();
 }
 // Helper function to check if transactions match
 function transactionsMatch(source, target) {
@@ -239,9 +241,15 @@ function transactionsMatch(source, target) {
     // Get Levenshtein distance
     const distance = turbocommons_ts_1.StringUtils.compareByLevenshtein(s1, s2);
     const similarity = turbocommons_ts_1.StringUtils.compareSimilarityPercent(s1, s2);
-    console.log('Comparing:', { s1, s2, distance, similarity, amountMatch });
-    // Match if similarity is greater than 20%
-    return similarity > 20;
+    // Get longest common substring
+    const consecutiveMatch = hasConsecutiveMatch(s1, s2);
+    //console.log('Comparing:', { s1, s2, distance, similarity, consecutiveMatch, sourceAmount, targetAmount, amountMatch });
+    // Match if either condition is met:
+    // 1. LCS length > 2 AND similarity >= 15%
+    // 2. Overall similarity > 20%]
+    const similarityCondition = similarity > 20;
+    //console.log('Match conditions:', { consecutiveMatch, similarityCondition, result: consecutiveMatch || similarityCondition });
+    return consecutiveMatch || similarityCondition;
 }
 function findDifferences(source, target, key = '') {
     const differences = [];
@@ -249,22 +257,19 @@ function findDifferences(source, target, key = '') {
     for (const sourceRecord of source) {
         let found = false;
         // Check all target records
-        target.forEach(targetRecord => {
+        for (const targetRecord of target) {
             const sourceAmount = getAmount(sourceRecord);
             const targetAmount = getAmount(targetRecord);
             const amountMatch = sourceAmount === targetAmount;
             if (amountMatch) {
-                // Normalize strings
-                const s1 = normalize(sourceRecord.name);
-                const s2 = normalize(targetRecord.name);
-                // Get similarity
-                const similarity = turbocommons_ts_1.StringUtils.compareSimilarityPercent(s1, s2);
-                // Check if this is a match
-                if (similarity > 20) {
-                    found = true;
+                // Check if transaction amount matches have similar names.
+                found = transactionsMatch(sourceRecord, targetRecord);
+                // If we found a match, break out of the loop
+                if (found) {
+                    break;
                 }
             }
-        });
+        }
         // If no match found and not ignored, add to differences
         if (!found && !shouldIgnoreTransaction(sourceRecord.name)) {
             if (key === 'goodBudget' && !sourceRecord.envelope) {
@@ -307,6 +312,41 @@ function formatDate(dateString) {
     }
     return 'null';
 }
+/**
+ * Checks if two strings have at least N consecutive characters in common
+ * @param s1 First string to compare
+ * @param s2 Second string to compare
+ * @param minLength Minimum length of consecutive matching characters (default: 3)
+ * @param caseSensitive Whether the comparison should be case sensitive (default: false)
+ * @returns Boolean indicating whether a match of at least minLength was found
+ */
+function hasConsecutiveMatch(s1, s2, minLength = 3, caseSensitive = false) {
+    // Normalize case if not case sensitive
+    if (!caseSensitive) {
+        s1 = s1.toLowerCase();
+        s2 = s2.toLowerCase();
+    }
+    // Check every possible starting position in s1
+    for (let i = 0; i <= s1.length - minLength; i++) {
+        // Check every possible starting position in s2
+        for (let j = 0; j <= s2.length - minLength; j++) {
+            // Count how many consecutive characters match
+            let matchLength = 0;
+            while (i + matchLength < s1.length &&
+                j + matchLength < s2.length &&
+                s1[i + matchLength] === s2[j + matchLength]) {
+                matchLength++;
+                // If we've found a match of the minimum length, return true immediately
+                if (matchLength >= minLength) {
+                    return true;
+                }
+            }
+        }
+    }
+    // No match of minimum length was found
+    return false;
+}
+exports.hasConsecutiveMatch = hasConsecutiveMatch;
 function compareTransactions(bankRecords, goodBudgetRecords) {
     const result = {
         differencesFromGoodBudget: [],

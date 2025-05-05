@@ -31,7 +31,7 @@ function formatAmount(amount: number): string {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 
@@ -47,7 +47,7 @@ export class GoodBudgetParser implements CSVParserStrategy {
       envelope: record.envelope || '--SPLIT--',
       formattedAmount: formatAmount(amount),
       date: formatDate(record.date),
-      originalIndex: record.originalIndex
+      originalIndex: record.originalIndex,
     };
   }
 }
@@ -59,13 +59,12 @@ export class CitiBankParser implements CSVParserStrategy {
   }
 
   transformRecord(record: any): CSVRecord {
-    
     // Convert credit/debit to a single amount
     let amount = 0;
     if (record.debit) {
       amount = -Number(record.debit.toString().replace(/,/g, ''));
     } else if (record.credit) {
-      amount = Number(record.credit.toString().replace(/,/g, ''));
+      amount = -Number(record.credit.toString().replace(/,/g, ''));
     }
 
     const transformedRecord = {
@@ -73,7 +72,7 @@ export class CitiBankParser implements CSVParserStrategy {
       envelope: '',
       formattedAmount: formatAmount(amount),
       date: formatDate(record.date),
-      originalIndex: record.originalIndex
+      originalIndex: record.originalIndex,
     };
 
     return transformedRecord;
@@ -88,7 +87,6 @@ export class ChaseParser implements CSVParserStrategy {
   }
 
   transformRecord(record: any): CSVRecord {
-    
     // Handle amount - Chase uses negative numbers for debits
     let amount = 0;
     if (record.amount) {
@@ -104,7 +102,7 @@ export class ChaseParser implements CSVParserStrategy {
       envelope: '',
       formattedAmount: formatAmount(amount),
       date: formatDate(record.date),
-      originalIndex: record.originalIndex
+      originalIndex: record.originalIndex,
     };
 
     return transformedRecord;
@@ -123,17 +121,17 @@ export class USBankParser implements CSVParserStrategy {
       envelope: '',
       formattedAmount: formatAmount(amount),
       date: formatDate(record.date),
-      originalIndex: record.originalIndex
+      originalIndex: record.originalIndex,
     };
   }
 }
 
 const parserMap: Record<string, new () => CSVParserStrategy> = {
-  'goodBudget': GoodBudgetParser,
-  'citiBank': CitiBankParser,
-  'chase': ChaseParser,
+  goodBudget: GoodBudgetParser,
+  citiBank: CitiBankParser,
+  chase: ChaseParser,
   'us-checking': USBankParser,
-  'us-credit': USBankParser
+  'us-credit': USBankParser,
 };
 
 function getParser(key: string): CSVParserStrategy {
@@ -219,36 +217,44 @@ function shouldIgnoreTransaction(name: string): boolean {
     'WEB AUTHORIZED PMT CITI CARD ONLINE',
     'MONTHLY MAINTENANCE FEE',
   ];
-  
-  return name === 'Envelope Transfer' || 
-         payments.some(payment => name.includes(payment));
+
+  return (
+    name === 'Envelope Transfer' ||
+    payments.some((payment) => name.includes(payment))
+  );
 }
 
 // Helper function to normalize transaction names
-function normalize(input: string, abbreviations: string[] = ['SQ']): string {
+function normalize(
+  input: string,
+  ignores: string[] = ['SQ', 'ELECTRONIC WITHDRAWAL', 'WEB AUTHORIZED PMT'],
+): string {
   // First remove any known abbreviations from the start
   let processedString = input;
-  for (const abbr of abbreviations) {
+  for (const ignore of ignores) {
     // Remove abbreviation followed by a space or asterisk
-    const pattern = new RegExp(`^${abbr}\\s+\\*?\\s*`, 'i');
+    const pattern = new RegExp(`^${ignore}\\s+\\*?\\s*`, 'i');
     processedString = processedString.replace(pattern, '');
   }
 
-  // Now take the first 10 characters
-  processedString = processedString.substring(0, 10);
+  // Remove special characters and whitespaces
+  processedString = processedString.replace(/[^\w]/g, '');
 
-  // Lowercase and remove all white spaces
-  return processedString.toLowerCase().replace(/\s+/g, '');
+  // Now take the first 10 characters
+  processedString = processedString.substring(0, 20);
+
+  // Lowercase
+  return processedString.toLowerCase();
 }
 
 // Helper function to check if transactions match
 function transactionsMatch(source: CSVRecord, target: CSVRecord): boolean {
   const sourceAmount = getAmount(source);
   const targetAmount = getAmount(target);
-  
+
   // check if amounts match
   const amountMatch = sourceAmount === targetAmount;
-  
+
   if (!amountMatch) {
     return false;
   }
@@ -256,13 +262,17 @@ function transactionsMatch(source: CSVRecord, target: CSVRecord): boolean {
   const s1 = normalize(source.name);
   const s2 = normalize(target.name);
 
-  // Get Levenshtein distance
-  const distance = StringUtils.compareByLevenshtein(s1, s2);
+  // Get similarity
   const similarity = StringUtils.compareSimilarityPercent(s1, s2);
-  console.log('Comparing:', { s1, s2, distance, similarity, amountMatch });
 
-  // Match if similarity is greater than 20%
-  return similarity > 20;
+  // Get longest common substring
+  const consecutiveMatch = hasConsecutiveMatch(s1, s2);
+
+  // Only true if similarity is greater than 20%
+  const similarityCondition = similarity > 20;
+
+  // Return true if either condition is met
+  return consecutiveMatch || similarityCondition;
 }
 
 interface ComparisonResult {
@@ -270,33 +280,32 @@ interface ComparisonResult {
   differencesFromBanks: CSVRecord[];
 }
 
-export function findDifferences(source: CSVRecord[], target: CSVRecord[], key: string = ''): CSVRecord[] {
+export function findDifferences(
+  source: CSVRecord[],
+  target: CSVRecord[],
+  key: string = '',
+): CSVRecord[] {
   const differences: CSVRecord[] = [];
-  const found = new Set<number>();
 
   for (const sourceRecord of source) {
     let found = false;
 
     // Check all target records
-    target.forEach(targetRecord => {
+    for (const targetRecord of target) {
       const sourceAmount = getAmount(sourceRecord);
       const targetAmount = getAmount(targetRecord);
       const amountMatch = sourceAmount === targetAmount;
 
       if (amountMatch) {
-        // Normalize strings
-        const s1 = normalize(sourceRecord.name);
-        const s2 = normalize(targetRecord.name);
-        
-        // Get similarity
-        const similarity = StringUtils.compareSimilarityPercent(s1, s2);
+        // Check if transaction amount matches have similar names.
+        found = transactionsMatch(sourceRecord, targetRecord);
 
-        // Check if this is a match
-        if (similarity > 20) {
-          found = true;
+        // If we found a match, break out of the loop
+        if (found) {
+          break;
         }
       }
-    });
+    }
 
     // If no match found and not ignored, add to differences
     if (!found && !shouldIgnoreTransaction(sourceRecord.name)) {
@@ -306,7 +315,7 @@ export function findDifferences(source: CSVRecord[], target: CSVRecord[], key: s
       differences.push(sourceRecord);
     }
   }
-  
+
   return differences;
 }
 
@@ -329,7 +338,9 @@ function formatDate(dateString: string | undefined | null): string {
     const day = parseInt(dashParts[2]);
 
     if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      return `${year}-${month.toString().padStart(2, '0')}-${day
+        .toString()
+        .padStart(2, '0')}`;
     }
   }
 
@@ -341,26 +352,56 @@ function formatDate(dateString: string | undefined | null): string {
     const year = parseInt(slashParts[2]);
 
     if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
-      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      return `${year}-${month.toString().padStart(2, '0')}-${day
+        .toString()
+        .padStart(2, '0')}`;
     }
   }
 
   return 'null';
 }
 
-export function compareTransactions(bankRecords: CSVRecord[], goodBudgetRecords: CSVRecord[]): ComparisonResult {
-  const result: ComparisonResult = {
-    differencesFromGoodBudget: [],
-    differencesFromBanks: []
-  };
+/**
+ * Checks if two strings have at least N consecutive characters in common
+ * @param s1 First string to compare
+ * @param s2 Second string to compare
+ * @param minLength Minimum length of consecutive matching characters (default: 3)
+ * @param caseSensitive Whether the comparison should be case sensitive (default: false)
+ * @returns Boolean indicating whether a match of at least minLength was found
+ */
+export function hasConsecutiveMatch(
+  s1: string,
+  s2: string,
+  minLength: number = 3,
+  caseSensitive: boolean = false,
+): boolean {
+  // Normalize case if not case sensitive
+  if (!caseSensitive) {
+    s1 = s1.toLowerCase();
+    s2 = s2.toLowerCase();
+  }
 
-  // Find differences in both directions
-  const goodBudgetDifferences = findDifferences(goodBudgetRecords, bankRecords, 'goodBudget');
-  const bankDifferences = findDifferences(bankRecords, goodBudgetRecords, 'banks');
+  // Check every possible starting position in s1
+  for (let i = 0; i <= s1.length - minLength; i++) {
+    // Check every possible starting position in s2
+    for (let j = 0; j <= s2.length - minLength; j++) {
+      // Count how many consecutive characters match
+      let matchLength = 0;
+      while (
+        i + matchLength < s1.length &&
+        j + matchLength < s2.length &&
+        s1[i + matchLength] === s2[j + matchLength]
+      ) {
+        matchLength++;
 
-  // Add differences to result
-  result.differencesFromGoodBudget = goodBudgetDifferences;
-  result.differencesFromBanks = bankDifferences;
+        // If we've found a match of the minimum length, return true immediately
+        if (matchLength >= minLength) {
+          return true;
+        }
+      }
+    }
+  }
 
-  return result;
+  // No match of minimum length was found
+  return false;
 }
