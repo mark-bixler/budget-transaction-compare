@@ -32,7 +32,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.compareTransactions = exports.hasConsecutiveMatch = exports.findDifferences = exports.compareCSVs = exports.USBankParser = exports.ChaseParser = exports.CitiBankParser = exports.GoodBudgetParser = void 0;
+exports.hasConsecutiveMatch = exports.findDifferences = exports.compareCSVs = exports.USBankParser = exports.ChaseParser = exports.CitiBankParser = exports.GoodBudgetParser = void 0;
 const Papa = __importStar(require("papaparse"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -43,7 +43,7 @@ function formatAmount(amount) {
         style: 'currency',
         currency: 'USD',
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
     }).format(amount);
 }
 class GoodBudgetParser {
@@ -58,7 +58,7 @@ class GoodBudgetParser {
             envelope: record.envelope || '--SPLIT--',
             formattedAmount: formatAmount(amount),
             date: formatDate(record.date),
-            originalIndex: record.originalIndex
+            originalIndex: record.originalIndex,
         };
     }
 }
@@ -83,7 +83,7 @@ class CitiBankParser {
             envelope: '',
             formattedAmount: formatAmount(amount),
             date: formatDate(record.date),
-            originalIndex: record.originalIndex
+            originalIndex: record.originalIndex,
         };
         return transformedRecord;
     }
@@ -114,7 +114,7 @@ class ChaseParser {
             envelope: '',
             formattedAmount: formatAmount(amount),
             date: formatDate(record.date),
-            originalIndex: record.originalIndex
+            originalIndex: record.originalIndex,
         };
         return transformedRecord;
     }
@@ -132,17 +132,17 @@ class USBankParser {
             envelope: '',
             formattedAmount: formatAmount(amount),
             date: formatDate(record.date),
-            originalIndex: record.originalIndex
+            originalIndex: record.originalIndex,
         };
     }
 }
 exports.USBankParser = USBankParser;
 const parserMap = {
-    'goodBudget': GoodBudgetParser,
-    'citiBank': CitiBankParser,
-    'chase': ChaseParser,
+    goodBudget: GoodBudgetParser,
+    citiBank: CitiBankParser,
+    chase: ChaseParser,
     'us-checking': USBankParser,
-    'us-credit': USBankParser
+    'us-credit': USBankParser,
 };
 function getParser(key) {
     const Parser = parserMap[key];
@@ -208,8 +208,8 @@ function shouldIgnoreTransaction(name) {
         'WEB AUTHORIZED PMT CITI CARD ONLINE',
         'MONTHLY MAINTENANCE FEE',
     ];
-    return name === 'Envelope Transfer' ||
-        payments.some(payment => name.includes(payment));
+    return (name === 'Envelope Transfer' ||
+        payments.some((payment) => name.includes(payment)));
 }
 // Helper function to normalize transaction names
 function normalize(input, ignores = ['SQ', 'ELECTRONIC WITHDRAWAL', 'WEB AUTHORIZED PMT']) {
@@ -238,35 +238,83 @@ function transactionsMatch(source, target) {
     }
     const s1 = normalize(source.name);
     const s2 = normalize(target.name);
-    // Get Levenshtein distance
-    const distance = turbocommons_ts_1.StringUtils.compareByLevenshtein(s1, s2);
+    // Get similarity
     const similarity = turbocommons_ts_1.StringUtils.compareSimilarityPercent(s1, s2);
     // Get longest common substring
     const consecutiveMatch = hasConsecutiveMatch(s1, s2);
-    //console.log('Comparing:', { s1, s2, distance, similarity, consecutiveMatch, sourceAmount, targetAmount, amountMatch });
-    // Match if either condition is met:
-    // 1. LCS length > 2 AND similarity >= 15%
-    // 2. Overall similarity > 20%]
+    // Only true if similarity is greater than 20%
     const similarityCondition = similarity > 20;
-    //console.log('Match conditions:', { consecutiveMatch, similarityCondition, result: consecutiveMatch || similarityCondition });
+    // Return true if either condition is met
     return consecutiveMatch || similarityCondition;
+}
+// Helper function to check if dates are within 1 day of each other
+function areDatesWithinOneDay(date1, date2) {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    // Get the difference in days
+    const diffTime = Math.abs(d2.getTime() - d1.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 1;
+}
+// Helper function to group transactions by vendor and date
+function groupTransactionsByVendorAndDate(records) {
+    const groups = new Map();
+    for (const record of records) {
+        const normalizedName = normalize(record.name);
+        // Find an existing group with the same vendor and a date within 1 day
+        let foundGroup = false;
+        for (const [key, group] of groups.entries()) {
+            const [groupName, groupDate] = key.split('|');
+            if (groupName === normalizedName && areDatesWithinOneDay(groupDate, record.date)) {
+                group.push(record);
+                foundGroup = true;
+                break;
+            }
+        }
+        // If no matching group found, create a new one
+        if (!foundGroup) {
+            const key = `${normalizedName}|${record.date}`;
+            groups.set(key, [record]);
+        }
+    }
+    return groups;
+}
+// Helper function to sum amounts in a group
+function sumGroupAmounts(group) {
+    return group.reduce((sum, record) => sum + getAmount(record), 0);
 }
 function findDifferences(source, target, key = '') {
     const differences = [];
-    const found = new Set();
+    // Group target records by vendor and date
+    const targetGroups = groupTransactionsByVendorAndDate(target);
     for (const sourceRecord of source) {
         let found = false;
-        // Check all target records
-        for (const targetRecord of target) {
-            const sourceAmount = getAmount(sourceRecord);
-            const targetAmount = getAmount(targetRecord);
-            const amountMatch = sourceAmount === targetAmount;
-            if (amountMatch) {
-                // Check if transaction amount matches have similar names.
-                found = transactionsMatch(sourceRecord, targetRecord);
-                // If we found a match, break out of the loop
-                if (found) {
+        const normalizedName = normalize(sourceRecord.name);
+        // Check all groups for this vendor
+        for (const [groupKey, group] of targetGroups.entries()) {
+            const [groupName, groupDate] = groupKey.split('|');
+            // If vendor matches and dates are within 1 day
+            if (groupName === normalizedName && areDatesWithinOneDay(groupDate, sourceRecord.date)) {
+                const sourceAmount = getAmount(sourceRecord);
+                const groupAmount = sumGroupAmounts(group);
+                // If amounts match, consider it a match
+                if (Math.abs(sourceAmount - groupAmount) < 0.01) {
+                    found = true;
                     break;
+                }
+            }
+        }
+        // If no group match found, check individual transactions
+        if (!found) {
+            for (const targetRecord of target) {
+                const sourceAmount = getAmount(sourceRecord);
+                const targetAmount = getAmount(targetRecord);
+                const amountMatch = sourceAmount === targetAmount;
+                if (amountMatch) {
+                    found = transactionsMatch(sourceRecord, targetRecord);
+                    if (found) {
+                        break;
+                    }
                 }
             }
         }
@@ -278,7 +326,8 @@ function findDifferences(source, target, key = '') {
             differences.push(sourceRecord);
         }
     }
-    return differences;
+    // Sort differences alphabetically by name
+    return differences.sort((a, b) => a.name.localeCompare(b.name));
 }
 exports.findDifferences = findDifferences;
 // Function to Standardize Transaction Dates
@@ -297,7 +346,9 @@ function formatDate(dateString) {
         const month = parseInt(dashParts[1]);
         const day = parseInt(dashParts[2]);
         if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-            return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+            return `${year}-${month.toString().padStart(2, '0')}-${day
+                .toString()
+                .padStart(2, '0')}`;
         }
     }
     // Try MM/DD/YYYY format
@@ -307,7 +358,9 @@ function formatDate(dateString) {
         const day = parseInt(slashParts[1]);
         const year = parseInt(slashParts[2]);
         if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
-            return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+            return `${year}-${month.toString().padStart(2, '0')}-${day
+                .toString()
+                .padStart(2, '0')}`;
         }
     }
     return 'null';
@@ -347,17 +400,3 @@ function hasConsecutiveMatch(s1, s2, minLength = 3, caseSensitive = false) {
     return false;
 }
 exports.hasConsecutiveMatch = hasConsecutiveMatch;
-function compareTransactions(bankRecords, goodBudgetRecords) {
-    const result = {
-        differencesFromGoodBudget: [],
-        differencesFromBanks: []
-    };
-    // Find differences in both directions
-    const goodBudgetDifferences = findDifferences(goodBudgetRecords, bankRecords, 'goodBudget');
-    const bankDifferences = findDifferences(bankRecords, goodBudgetRecords, 'banks');
-    // Add differences to result
-    result.differencesFromGoodBudget = goodBudgetDifferences;
-    result.differencesFromBanks = bankDifferences;
-    return result;
-}
-exports.compareTransactions = compareTransactions;

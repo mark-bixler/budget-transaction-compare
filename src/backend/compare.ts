@@ -216,6 +216,7 @@ function shouldIgnoreTransaction(name: string): boolean {
     'WEB AUTHORIZED PMT CHASE CREDIT CRD',
     'WEB AUTHORIZED PMT CITI CARD ONLINE',
     'MONTHLY MAINTENANCE FEE',
+    'ELECTRONIC DEPOSIT MINDBODY',
   ];
 
   return (
@@ -280,29 +281,94 @@ interface ComparisonResult {
   differencesFromBanks: CSVRecord[];
 }
 
+// Helper function to check if dates are within 1 day of each other
+function areDatesWithinOneDay(date1: string, date2: string): boolean {
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  
+  // Get the difference in days
+  const diffTime = Math.abs(d2.getTime() - d1.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays <= 1;
+}
+
+// Helper function to group transactions by vendor and date
+function groupTransactionsByVendorAndDate(records: CSVRecord[]): Map<string, CSVRecord[]> {
+  const groups = new Map<string, CSVRecord[]>();
+  
+  for (const record of records) {
+    const normalizedName = normalize(record.name);
+    
+    // Find an existing group with the same vendor and a date within 1 day
+    let foundGroup = false;
+    for (const [key, group] of groups.entries()) {
+      const [groupName, groupDate] = key.split('|');
+      if (groupName === normalizedName && areDatesWithinOneDay(groupDate, record.date)) {
+        group.push(record);
+        foundGroup = true;
+        break;
+      }
+    }
+    
+    // If no matching group found, create a new one
+    if (!foundGroup) {
+      const key = `${normalizedName}|${record.date}`;
+      groups.set(key, [record]);
+    }
+  }
+  
+  return groups;
+}
+
+// Helper function to sum amounts in a group
+function sumGroupAmounts(group: CSVRecord[]): number {
+  return group.reduce((sum, record) => sum + getAmount(record), 0);
+}
+
 export function findDifferences(
   source: CSVRecord[],
   target: CSVRecord[],
   key: string = '',
 ): CSVRecord[] {
   const differences: CSVRecord[] = [];
-
+  
+  // Group target records by vendor and date
+  const targetGroups = groupTransactionsByVendorAndDate(target);
+  
   for (const sourceRecord of source) {
     let found = false;
-
-    // Check all target records
-    for (const targetRecord of target) {
-      const sourceAmount = getAmount(sourceRecord);
-      const targetAmount = getAmount(targetRecord);
-      const amountMatch = sourceAmount === targetAmount;
-
-      if (amountMatch) {
-        // Check if transaction amount matches have similar names.
-        found = transactionsMatch(sourceRecord, targetRecord);
-
-        // If we found a match, break out of the loop
-        if (found) {
+    const normalizedName = normalize(sourceRecord.name);
+    
+    // Check all groups for this vendor
+    for (const [groupKey, group] of targetGroups.entries()) {
+      const [groupName, groupDate] = groupKey.split('|');
+      
+      // If vendor matches and dates are within 1 day
+      if (groupName === normalizedName && areDatesWithinOneDay(groupDate, sourceRecord.date)) {
+        const sourceAmount = getAmount(sourceRecord);
+        const groupAmount = sumGroupAmounts(group);
+        
+        // If amounts match, consider it a match
+        if (Math.abs(sourceAmount - groupAmount) < 0.01) {
+          found = true;
           break;
+        }
+      }
+    }
+    
+    // If no group match found, check individual transactions
+    if (!found) {
+      for (const targetRecord of target) {
+        const sourceAmount = getAmount(sourceRecord);
+        const targetAmount = getAmount(targetRecord);
+        const amountMatch = sourceAmount === targetAmount;
+
+        if (amountMatch) {
+          found = transactionsMatch(sourceRecord, targetRecord);
+          if (found) {
+            break;
+          }
         }
       }
     }
@@ -315,8 +381,9 @@ export function findDifferences(
       differences.push(sourceRecord);
     }
   }
-
-  return differences;
+  
+  // Sort differences alphabetically by name
+  return differences.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Function to Standardize Transaction Dates
