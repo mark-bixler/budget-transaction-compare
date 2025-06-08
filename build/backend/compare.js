@@ -32,10 +32,125 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.compareCSVs = void 0;
+exports.compareTransactions = exports.hasConsecutiveMatch = exports.findDifferences = exports.compareCSVs = exports.USBankParser = exports.ChaseParser = exports.CitiBankParser = exports.GoodBudgetParser = void 0;
 const Papa = __importStar(require("papaparse"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const turbocommons_ts_1 = require("turbocommons-ts");
+// Helper function to format amount with dollar sign and decimals
+function formatAmount(amount) {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(amount);
+}
+class GoodBudgetParser {
+    transformHeader(header) {
+        return header.toLowerCase();
+    }
+    transformRecord(record) {
+        var _a;
+        const amount = Number(((_a = record.amount) === null || _a === void 0 ? void 0 : _a.toString().replace(/,/g, '')) || 0);
+        return {
+            name: record.name,
+            envelope: record.envelope || '--SPLIT--',
+            formattedAmount: formatAmount(amount),
+            date: formatDate(record.date),
+            originalIndex: record.originalIndex
+        };
+    }
+}
+exports.GoodBudgetParser = GoodBudgetParser;
+class CitiBankParser {
+    transformHeader(header) {
+        if (header.toLowerCase() === 'description')
+            return 'name';
+        return header.toLowerCase();
+    }
+    transformRecord(record) {
+        // Convert credit/debit to a single amount
+        let amount = 0;
+        if (record.debit) {
+            amount = -Number(record.debit.toString().replace(/,/g, ''));
+        }
+        else if (record.credit) {
+            amount = -Number(record.credit.toString().replace(/,/g, ''));
+        }
+        const transformedRecord = {
+            name: record.name || record.description || '',
+            envelope: '',
+            formattedAmount: formatAmount(amount),
+            date: formatDate(record.date),
+            originalIndex: record.originalIndex
+        };
+        return transformedRecord;
+    }
+}
+exports.CitiBankParser = CitiBankParser;
+class ChaseParser {
+    transformHeader(header) {
+        if (header.toLowerCase() === 'description')
+            return 'name';
+        if (header.toLowerCase() === 'transaction date')
+            return 'date';
+        return header.toLowerCase();
+    }
+    transformRecord(record) {
+        // Handle amount - Chase uses negative numbers for debits
+        let amount = 0;
+        if (record.amount) {
+            amount = Number(record.amount.toString().replace(/,/g, ''));
+        }
+        else if (record.debit) {
+            amount = -Number(record.debit.toString().replace(/,/g, ''));
+        }
+        else if (record.credit) {
+            amount = Number(record.credit.toString().replace(/,/g, ''));
+        }
+        const transformedRecord = {
+            name: record.name || record.description || '',
+            envelope: '',
+            formattedAmount: formatAmount(amount),
+            date: formatDate(record.date),
+            originalIndex: record.originalIndex
+        };
+        return transformedRecord;
+    }
+}
+exports.ChaseParser = ChaseParser;
+class USBankParser {
+    transformHeader(header) {
+        return header.toLowerCase();
+    }
+    transformRecord(record) {
+        var _a;
+        const amount = Number(((_a = record.amount) === null || _a === void 0 ? void 0 : _a.toString().replace(/,/g, '')) || 0);
+        return {
+            name: record.name,
+            envelope: '',
+            formattedAmount: formatAmount(amount),
+            date: formatDate(record.date),
+            originalIndex: record.originalIndex
+        };
+    }
+}
+exports.USBankParser = USBankParser;
+const parserMap = {
+    'goodBudget': GoodBudgetParser,
+    'citiBank': CitiBankParser,
+    'chase': ChaseParser,
+    'us-checking': USBankParser,
+    'us-credit': USBankParser
+};
+function getParser(key) {
+    const Parser = parserMap[key];
+    if (!Parser) {
+        throw new Error(`Unknown parser key: ${key}`);
+    }
+    return new Parser();
+}
 function compareCSVs(csv1, csv2, csv3, csv4, csv5) {
     return __awaiter(this, void 0, void 0, function* () {
         const csv1Records = yield parseCSV(csv1, 'goodBudget');
@@ -61,28 +176,14 @@ exports.compareCSVs = compareCSVs;
 function parseCSV(file, key) {
     return new Promise((resolve, reject) => {
         const results = [];
+        const parser = getParser(key);
         const filePath = path.join(__dirname, '../..', file);
         const fileStream = fs.createReadStream(filePath);
         Papa.parse(fileStream, {
             header: true,
-            transformHeader: function (h) {
-                if (h.toLowerCase() === 'description') {
-                    return 'name';
-                }
-                if (h.toLowerCase() === 'transaction date') {
-                    return 'date';
-                }
-                return h.toLowerCase();
-            },
+            transformHeader: parser.transformHeader.bind(parser),
             step: (result) => {
-                // invert data amount for citiBank
-                if (key === 'citiBank') {
-                    result.data.debit = -result.data.debit;
-                    result.data.credit = -result.data.credit;
-                }
-                // standardize date format
-                result.data.date = formatDate(result.data.date);
-                results.push(result.data);
+                results.push(parser.transformRecord(result.data));
             },
             complete: () => {
                 resolve(results);
@@ -93,73 +194,104 @@ function parseCSV(file, key) {
         });
     });
 }
-// Compare csvs for differences
-function findDifferences(source, target, key) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const differences = [];
-        for (const sourceRecord of source) {
-            let found = false;
-            for (const targetRecord of target) {
-                // convert amounts for better comparison
-                // initialize comparison numbers
-                let sourceAmount = 0;
-                let targetAmount = 0;
-                // convert source records with have header "amount"
-                if (sourceRecord.amount) {
-                    sourceAmount = Number(sourceRecord.amount.toString().replace(/,/g, ''));
-                }
-                // convert target records with have header "amount"
-                if (targetRecord.amount) {
-                    targetAmount = Number(targetRecord.amount.toString().replace(/,/g, ''));
-                }
-                // merge potential source credit or debit to amount.
-                if (sourceRecord.credit) {
-                    sourceAmount = Number(sourceRecord.credit.toString().replace(/,/g, ''));
-                    sourceRecord.amount = sourceRecord.credit;
-                }
-                else if (sourceRecord.debit) {
-                    sourceAmount = Number(sourceRecord.debit.toString().replace(/,/g, ''));
-                    sourceRecord.debit = sourceRecord.debit;
-                }
-                // merge potential target credit or debit to amount.
-                if (targetRecord.credit) {
-                    targetAmount = Number(targetRecord.credit.toString().replace(/,/g, ''));
-                    targetRecord.amount = targetRecord.credit;
-                }
-                else if (targetRecord.debit) {
-                    targetAmount = Number(targetRecord.debit.toString().replace(/,/g, ''));
-                    targetRecord.amount = targetRecord.debit;
-                }
-                if (sourceAmount === targetAmount) {
-                    found = true;
+// Helper function to get amount from record
+function getAmount(record) {
+    // Remove currency symbol and commas, then parse as number
+    return Number(record.formattedAmount.replace(/[$,]/g, ''));
+}
+// Helper function to check if transaction should be ignored
+function shouldIgnoreTransaction(name) {
+    const payments = [
+        'PAYMENT',
+        'Payment Thank You - Web',
+        'WEB AUTHORIZED PMT CHASE CREDIT CRD',
+        'WEB AUTHORIZED PMT CITI CARD ONLINE',
+        'MONTHLY MAINTENANCE FEE',
+    ];
+    return name === 'Envelope Transfer' ||
+        payments.some(payment => name.includes(payment));
+}
+// Helper function to normalize transaction names
+function normalize(input, ignores = ['SQ', 'ELECTRONIC WITHDRAWAL', 'WEB AUTHORIZED PMT']) {
+    // First remove any known abbreviations from the start
+    let processedString = input;
+    for (const ignore of ignores) {
+        // Remove abbreviation followed by a space or asterisk
+        const pattern = new RegExp(`^${ignore}\\s+\\*?\\s*`, 'i');
+        processedString = processedString.replace(pattern, '');
+    }
+    // Remove special characters and whitespaces
+    processedString = processedString.replace(/[^\w]/g, '');
+    // Now take the first 10 characters
+    processedString = processedString.substring(0, 20);
+    // Lowercase
+    return processedString.toLowerCase();
+}
+// Helper function to check if transactions match
+function transactionsMatch(source, target) {
+    const sourceAmount = getAmount(source);
+    const targetAmount = getAmount(target);
+    // check if amounts match
+    const amountMatch = sourceAmount === targetAmount;
+    if (!amountMatch) {
+        return false;
+    }
+    const s1 = normalize(source.name);
+    const s2 = normalize(target.name);
+    // Get Levenshtein distance
+    const distance = turbocommons_ts_1.StringUtils.compareByLevenshtein(s1, s2);
+    const similarity = turbocommons_ts_1.StringUtils.compareSimilarityPercent(s1, s2);
+    // Get longest common substring
+    const consecutiveMatch = hasConsecutiveMatch(s1, s2);
+    //console.log('Comparing:', { s1, s2, distance, similarity, consecutiveMatch, sourceAmount, targetAmount, amountMatch });
+    // Match if either condition is met:
+    // 1. LCS length > 2 AND similarity >= 15%
+    // 2. Overall similarity > 20%]
+    const similarityCondition = similarity > 20;
+    //console.log('Match conditions:', { consecutiveMatch, similarityCondition, result: consecutiveMatch || similarityCondition });
+    return consecutiveMatch || similarityCondition;
+}
+function findDifferences(source, target, key = '') {
+    const differences = [];
+    const found = new Set();
+    for (const sourceRecord of source) {
+        let found = false;
+        // Check all target records
+        for (const targetRecord of target) {
+            const sourceAmount = getAmount(sourceRecord);
+            const targetAmount = getAmount(targetRecord);
+            const amountMatch = sourceAmount === targetAmount;
+            if (amountMatch) {
+                // Check if transaction amount matches have similar names.
+                found = transactionsMatch(sourceRecord, targetRecord);
+                // If we found a match, break out of the loop
+                if (found) {
                     break;
                 }
             }
-            // return our missing transactions
-            let payments = [
-                'PAYMENT',
-                'Payment Thank You - Web',
-                'WEB AUTHORIZED PMT CHASE CREDIT CRD',
-                'WEB AUTHORIZED PMT CITI CARD ONLINE',
-                'MONTHLY MAINTENANCE FEE',
-            ];
-            if (!found &&
-                sourceRecord.name != 'Envelope Transfer' &&
-                !payments.some((payment) => sourceRecord.name.includes(payment))) {
-                // if the envelope is null, most like it's a split transaction
-                if (key == 'goodBudget' && !sourceRecord.envelope) {
-                    sourceRecord.envelope = '--SPLIT--';
-                }
-                differences.push(sourceRecord);
-            }
         }
-        return differences;
-    });
+        // If no match found and not ignored, add to differences
+        if (!found && !shouldIgnoreTransaction(sourceRecord.name)) {
+            if (key === 'goodBudget' && !sourceRecord.envelope) {
+                sourceRecord.envelope = '--SPLIT--';
+            }
+            differences.push(sourceRecord);
+        }
+    }
+    return differences;
 }
+exports.findDifferences = findDifferences;
 // Function to Standardize Transaction Dates
 function formatDate(dateString) {
+    if (!dateString) {
+        return 'null';
+    }
+    // Handle Chase's double date format (take the first date)
+    if (dateString.includes(',')) {
+        dateString = dateString.split(',')[0];
+    }
+    // Try YYYY-MM-DD format first
     const dashParts = dateString.split('-');
-    const slashParts = dateString.split('/');
     if (dashParts.length === 3) {
         const year = parseInt(dashParts[0]);
         const month = parseInt(dashParts[1]);
@@ -168,7 +300,9 @@ function formatDate(dateString) {
             return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
         }
     }
-    else if (slashParts.length === 3) {
+    // Try MM/DD/YYYY format
+    const slashParts = dateString.split('/');
+    if (slashParts.length === 3) {
         const month = parseInt(slashParts[0]);
         const day = parseInt(slashParts[1]);
         const year = parseInt(slashParts[2]);
@@ -176,5 +310,54 @@ function formatDate(dateString) {
             return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
         }
     }
-    return "null"; // Invalid date format
+    return 'null';
 }
+/**
+ * Checks if two strings have at least N consecutive characters in common
+ * @param s1 First string to compare
+ * @param s2 Second string to compare
+ * @param minLength Minimum length of consecutive matching characters (default: 3)
+ * @param caseSensitive Whether the comparison should be case sensitive (default: false)
+ * @returns Boolean indicating whether a match of at least minLength was found
+ */
+function hasConsecutiveMatch(s1, s2, minLength = 3, caseSensitive = false) {
+    // Normalize case if not case sensitive
+    if (!caseSensitive) {
+        s1 = s1.toLowerCase();
+        s2 = s2.toLowerCase();
+    }
+    // Check every possible starting position in s1
+    for (let i = 0; i <= s1.length - minLength; i++) {
+        // Check every possible starting position in s2
+        for (let j = 0; j <= s2.length - minLength; j++) {
+            // Count how many consecutive characters match
+            let matchLength = 0;
+            while (i + matchLength < s1.length &&
+                j + matchLength < s2.length &&
+                s1[i + matchLength] === s2[j + matchLength]) {
+                matchLength++;
+                // If we've found a match of the minimum length, return true immediately
+                if (matchLength >= minLength) {
+                    return true;
+                }
+            }
+        }
+    }
+    // No match of minimum length was found
+    return false;
+}
+exports.hasConsecutiveMatch = hasConsecutiveMatch;
+function compareTransactions(bankRecords, goodBudgetRecords) {
+    const result = {
+        differencesFromGoodBudget: [],
+        differencesFromBanks: []
+    };
+    // Find differences in both directions
+    const goodBudgetDifferences = findDifferences(goodBudgetRecords, bankRecords, 'goodBudget');
+    const bankDifferences = findDifferences(bankRecords, goodBudgetRecords, 'banks');
+    // Add differences to result
+    result.differencesFromGoodBudget = goodBudgetDifferences;
+    result.differencesFromBanks = bankDifferences;
+    return result;
+}
+exports.compareTransactions = compareTransactions;

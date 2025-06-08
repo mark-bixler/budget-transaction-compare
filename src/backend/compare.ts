@@ -1,15 +1,145 @@
 import * as Papa from 'papaparse';
 import * as fs from 'fs';
 import * as path from 'path';
+import { StringUtils } from 'turbocommons-ts';
 
 // create interface for records
-interface CSVRecord {
+export interface CSVRecord {
   name: string;
   envelope: string;
-  amount: number;
-  debit: number;
-  credit: number;
+  formattedAmount: string;
   date: string;
+  originalIndex?: number;
+}
+
+// Add new interface for amount matches
+export interface AmountMatch {
+  source: CSVRecord;
+  target: CSVRecord;
+  similarity: number;
+}
+
+// Define CSV parser strategies
+interface CSVParserStrategy {
+  transformHeader(header: string): string;
+  transformRecord(record: any): CSVRecord;
+}
+
+// Helper function to format amount with dollar sign and decimals
+function formatAmount(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+export class GoodBudgetParser implements CSVParserStrategy {
+  transformHeader(header: string): string {
+    return header.toLowerCase();
+  }
+
+  transformRecord(record: any): CSVRecord {
+    const amount = Number(record.amount?.toString().replace(/,/g, '') || 0);
+    return {
+      name: record.name,
+      envelope: record.envelope || '--SPLIT--',
+      formattedAmount: formatAmount(amount),
+      date: formatDate(record.date),
+      originalIndex: record.originalIndex,
+    };
+  }
+}
+
+export class CitiBankParser implements CSVParserStrategy {
+  transformHeader(header: string): string {
+    if (header.toLowerCase() === 'description') return 'name';
+    return header.toLowerCase();
+  }
+
+  transformRecord(record: any): CSVRecord {
+    // Convert credit/debit to a single amount
+    let amount = 0;
+    if (record.debit) {
+      amount = -Number(record.debit.toString().replace(/,/g, ''));
+    } else if (record.credit) {
+      amount = -Number(record.credit.toString().replace(/,/g, ''));
+    }
+
+    const transformedRecord = {
+      name: record.name || record.description || '',
+      envelope: '',
+      formattedAmount: formatAmount(amount),
+      date: formatDate(record.date),
+      originalIndex: record.originalIndex,
+    };
+
+    return transformedRecord;
+  }
+}
+
+export class ChaseParser implements CSVParserStrategy {
+  transformHeader(header: string): string {
+    if (header.toLowerCase() === 'description') return 'name';
+    if (header.toLowerCase() === 'transaction date') return 'date';
+    return header.toLowerCase();
+  }
+
+  transformRecord(record: any): CSVRecord {
+    // Handle amount - Chase uses negative numbers for debits
+    let amount = 0;
+    if (record.amount) {
+      amount = Number(record.amount.toString().replace(/,/g, ''));
+    } else if (record.debit) {
+      amount = -Number(record.debit.toString().replace(/,/g, ''));
+    } else if (record.credit) {
+      amount = Number(record.credit.toString().replace(/,/g, ''));
+    }
+
+    const transformedRecord = {
+      name: record.name || record.description || '',
+      envelope: '',
+      formattedAmount: formatAmount(amount),
+      date: formatDate(record.date),
+      originalIndex: record.originalIndex,
+    };
+
+    return transformedRecord;
+  }
+}
+
+export class USBankParser implements CSVParserStrategy {
+  transformHeader(header: string): string {
+    return header.toLowerCase();
+  }
+
+  transformRecord(record: any): CSVRecord {
+    const amount = Number(record.amount?.toString().replace(/,/g, '') || 0);
+    return {
+      name: record.name,
+      envelope: '',
+      formattedAmount: formatAmount(amount),
+      date: formatDate(record.date),
+      originalIndex: record.originalIndex,
+    };
+  }
+}
+
+const parserMap: Record<string, new () => CSVParserStrategy> = {
+  goodBudget: GoodBudgetParser,
+  citiBank: CitiBankParser,
+  chase: ChaseParser,
+  'us-checking': USBankParser,
+  'us-credit': USBankParser,
+};
+
+function getParser(key: string): CSVParserStrategy {
+  const Parser = parserMap[key];
+  if (!Parser) {
+    throw new Error(`Unknown parser key: ${key}`);
+  }
+  return new Parser();
 }
 
 export async function compareCSVs(
@@ -52,32 +182,15 @@ export async function compareCSVs(
 function parseCSV(file: string, key: string): Promise<CSVRecord[]> {
   return new Promise((resolve, reject) => {
     const results: CSVRecord[] = [];
-
+    const parser = getParser(key);
     const filePath = path.join(__dirname, '../..', file);
     const fileStream = fs.createReadStream(filePath);
 
-    Papa.parse<CSVRecord>(fileStream, {
+    Papa.parse(fileStream, {
       header: true,
-      transformHeader: function (h) {
-        if (h.toLowerCase() === 'description') {
-          return 'name';
-        }
-        if (h.toLowerCase() === 'transaction date') {
-          return 'date';
-        }
-        return h.toLowerCase();
-      },
+      transformHeader: parser.transformHeader.bind(parser),
       step: (result) => {
-        // invert data amount for citiBank
-        if (key === 'citiBank') {
-          result.data.debit = -result.data.debit;
-          result.data.credit = -result.data.credit;
-        }
-
-        // standardize date format
-        result.data.date = formatDate(result.data.date)
-
-        results.push(result.data);
+        results.push(parser.transformRecord(result.data));
       },
       complete: () => {
         resolve(results);
@@ -89,104 +202,206 @@ function parseCSV(file: string, key: string): Promise<CSVRecord[]> {
   });
 }
 
-// Compare csvs for differences
-async function findDifferences(
+// Helper function to get amount from record
+function getAmount(record: CSVRecord): number {
+  // Remove currency symbol and commas, then parse as number
+  return Number(record.formattedAmount.replace(/[$,]/g, ''));
+}
+
+// Helper function to check if transaction should be ignored
+function shouldIgnoreTransaction(name: string): boolean {
+  const payments = [
+    'PAYMENT',
+    'Payment Thank You - Web',
+    'WEB AUTHORIZED PMT CHASE CREDIT CRD',
+    'WEB AUTHORIZED PMT CITI CARD ONLINE',
+    'MONTHLY MAINTENANCE FEE',
+  ];
+
+  return (
+    name === 'Envelope Transfer' ||
+    payments.some((payment) => name.includes(payment))
+  );
+}
+
+// Helper function to normalize transaction names
+function normalize(
+  input: string,
+  ignores: string[] = ['SQ', 'ELECTRONIC WITHDRAWAL', 'WEB AUTHORIZED PMT'],
+): string {
+  // First remove any known abbreviations from the start
+  let processedString = input;
+  for (const ignore of ignores) {
+    // Remove abbreviation followed by a space or asterisk
+    const pattern = new RegExp(`^${ignore}\\s+\\*?\\s*`, 'i');
+    processedString = processedString.replace(pattern, '');
+  }
+
+  // Remove special characters and whitespaces
+  processedString = processedString.replace(/[^\w]/g, '');
+
+  // Now take the first 10 characters
+  processedString = processedString.substring(0, 20);
+
+  // Lowercase
+  return processedString.toLowerCase();
+}
+
+// Helper function to check if transactions match
+function transactionsMatch(source: CSVRecord, target: CSVRecord): boolean {
+  const sourceAmount = getAmount(source);
+  const targetAmount = getAmount(target);
+
+  // check if amounts match
+  const amountMatch = sourceAmount === targetAmount;
+
+  if (!amountMatch) {
+    return false;
+  }
+
+  const s1 = normalize(source.name);
+  const s2 = normalize(target.name);
+
+  // Get similarity
+  const similarity = StringUtils.compareSimilarityPercent(s1, s2);
+
+  // Get longest common substring
+  const consecutiveMatch = hasConsecutiveMatch(s1, s2);
+
+  // Only true if similarity is greater than 20%
+  const similarityCondition = similarity > 20;
+
+  // Return true if either condition is met
+  return consecutiveMatch || similarityCondition;
+}
+
+interface ComparisonResult {
+  differencesFromGoodBudget: CSVRecord[];
+  differencesFromBanks: CSVRecord[];
+}
+
+export function findDifferences(
   source: CSVRecord[],
   target: CSVRecord[],
-  key: string,
-) {
+  key: string = '',
+): CSVRecord[] {
   const differences: CSVRecord[] = [];
 
   for (const sourceRecord of source) {
     let found = false;
 
+    // Check all target records
     for (const targetRecord of target) {
-      // convert amounts for better comparison
+      const sourceAmount = getAmount(sourceRecord);
+      const targetAmount = getAmount(targetRecord);
+      const amountMatch = sourceAmount === targetAmount;
 
-      // initialize comparison numbers
-      let sourceAmount: Number = 0;
-      let targetAmount: Number = 0;
+      if (amountMatch) {
+        // Check if transaction amount matches have similar names.
+        found = transactionsMatch(sourceRecord, targetRecord);
 
-      // convert source records with have header "amount"
-      if (sourceRecord.amount) {
-        sourceAmount = Number(sourceRecord.amount.toString().replace(/,/g, ''));
-      }
-
-      // convert target records with have header "amount"
-      if (targetRecord.amount) {
-        targetAmount = Number(targetRecord.amount.toString().replace(/,/g, ''));
-      }
-
-      // merge potential source credit or debit to amount.
-      if (sourceRecord.credit) {
-        sourceAmount = Number(sourceRecord.credit.toString().replace(/,/g, ''));
-        sourceRecord.amount = sourceRecord.credit;
-      } else if (sourceRecord.debit) {
-        sourceAmount = Number(sourceRecord.debit.toString().replace(/,/g, ''));
-        sourceRecord.debit = sourceRecord.debit;
-      }
-
-      // merge potential target credit or debit to amount.
-      if (targetRecord.credit) {
-        targetAmount = Number(targetRecord.credit.toString().replace(/,/g, ''));
-        targetRecord.amount = targetRecord.credit;
-      } else if (targetRecord.debit) {
-        targetAmount = Number(targetRecord.debit.toString().replace(/,/g, ''));
-        targetRecord.amount = targetRecord.debit;
-      }
-
-      if (sourceAmount === targetAmount) {
-        found = true;
-        break;
+        // If we found a match, break out of the loop
+        if (found) {
+          break;
+        }
       }
     }
 
-    // return our missing transactions
-    let payments = [
-      'PAYMENT',
-      'Payment Thank You - Web',
-      'WEB AUTHORIZED PMT CHASE CREDIT CRD',
-      'WEB AUTHORIZED PMT CITI CARD ONLINE',
-      'MONTHLY MAINTENANCE FEE',
-    ];
-
-    if (
-      !found &&
-      sourceRecord.name != 'Envelope Transfer' &&
-      !payments.some((payment) => sourceRecord.name.includes(payment))
-    ) {
-      // if the envelope is null, most like it's a split transaction
-      if (key == 'goodBudget' && !sourceRecord.envelope) {
+    // If no match found and not ignored, add to differences
+    if (!found && !shouldIgnoreTransaction(sourceRecord.name)) {
+      if (key === 'goodBudget' && !sourceRecord.envelope) {
         sourceRecord.envelope = '--SPLIT--';
       }
       differences.push(sourceRecord);
     }
   }
+
   return differences;
 }
 
 // Function to Standardize Transaction Dates
-function formatDate(dateString: string): string {
-  const dashParts = dateString.split('-');
-  const slashParts = dateString.split('/');
+function formatDate(dateString: string | undefined | null): string {
+  if (!dateString) {
+    return 'null';
+  }
 
+  // Handle Chase's double date format (take the first date)
+  if (dateString.includes(',')) {
+    dateString = dateString.split(',')[0];
+  }
+
+  // Try YYYY-MM-DD format first
+  const dashParts = dateString.split('-');
   if (dashParts.length === 3) {
     const year = parseInt(dashParts[0]);
     const month = parseInt(dashParts[1]);
     const day = parseInt(dashParts[2]);
 
     if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      return `${year}-${month.toString().padStart(2, '0')}-${day
+        .toString()
+        .padStart(2, '0')}`;
     }
-  } else if (slashParts.length === 3) {
+  }
+
+  // Try MM/DD/YYYY format
+  const slashParts = dateString.split('/');
+  if (slashParts.length === 3) {
     const month = parseInt(slashParts[0]);
     const day = parseInt(slashParts[1]);
     const year = parseInt(slashParts[2]);
 
     if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
-      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      return `${year}-${month.toString().padStart(2, '0')}-${day
+        .toString()
+        .padStart(2, '0')}`;
     }
   }
 
-  return "null"; // Invalid date format
+  return 'null';
+}
+
+/**
+ * Checks if two strings have at least N consecutive characters in common
+ * @param s1 First string to compare
+ * @param s2 Second string to compare
+ * @param minLength Minimum length of consecutive matching characters (default: 3)
+ * @param caseSensitive Whether the comparison should be case sensitive (default: false)
+ * @returns Boolean indicating whether a match of at least minLength was found
+ */
+export function hasConsecutiveMatch(
+  s1: string,
+  s2: string,
+  minLength: number = 3,
+  caseSensitive: boolean = false,
+): boolean {
+  // Normalize case if not case sensitive
+  if (!caseSensitive) {
+    s1 = s1.toLowerCase();
+    s2 = s2.toLowerCase();
+  }
+
+  // Check every possible starting position in s1
+  for (let i = 0; i <= s1.length - minLength; i++) {
+    // Check every possible starting position in s2
+    for (let j = 0; j <= s2.length - minLength; j++) {
+      // Count how many consecutive characters match
+      let matchLength = 0;
+      while (
+        i + matchLength < s1.length &&
+        j + matchLength < s2.length &&
+        s1[i + matchLength] === s2[j + matchLength]
+      ) {
+        matchLength++;
+
+        // If we've found a match of the minimum length, return true immediately
+        if (matchLength >= minLength) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // No match of minimum length was found
+  return false;
 }
